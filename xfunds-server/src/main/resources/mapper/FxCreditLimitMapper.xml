@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxCreditLimitMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxCreditLimit">
+        <id column="limit_id" property="limitId"/>
+        <result column="customer_id" property="customerId"/>
+        <result column="currency" property="currency"/>
+        <result column="credit_limit_amount" property="creditLimitAmount"/>
+        <result column="used_amount" property="usedAmount"/>
+        <result column="available_amount" property="availableAmount"/>
+        <result column="status" property="status"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        limit_id, customer_id, currency, credit_limit_amount, used_amount,
+        available_amount, status, updated_at
+    </sql>
+
+    <select id="selectByCustomerIdAndCurrency" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_credit_limit
+        WHERE customer_id = #{customerId} AND currency = #{currency}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_credit_limit
+        ORDER BY customer_id, currency
+    </select>
+
+    <select id="selectByCustomerId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_credit_limit
+        WHERE customer_id = #{customerId}
+        ORDER BY currency
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxCreditLimit" useGeneratedKeys="true" keyProperty="limitId">
+        INSERT INTO fx_credit_limit (customer_id, currency, credit_limit_amount, used_amount,
+            available_amount, status, updated_at)
+        VALUES (#{customerId}, #{currency}, #{creditLimitAmount}, #{usedAmount},
+            #{availableAmount}, #{status}, NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxCreditLimit">
+        UPDATE fx_credit_limit
+        SET customer_id = #{customerId},
+            currency = #{currency},
+            credit_limit_amount = #{creditLimitAmount},
+            used_amount = #{usedAmount},
+            available_amount = #{availableAmount},
+            status = #{status},
+            updated_at = NOW()
+        WHERE limit_id = #{limitId}
+    </update>
+
+</mapper>

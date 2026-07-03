@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxUserMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxUser">
+        <id column="user_id" property="userId"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="real_name" property="realName"/>
+        <result column="org_code" property="orgCode"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        user_id, username, password, real_name, org_code, status, created_at, updated_at
+    </sql>
+
+    <select id="selectByUsername" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_user
+        WHERE username = #{username}
+    </select>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_user
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_user
+        ORDER BY user_id
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxUser" useGeneratedKeys="true" keyProperty="userId">
+        INSERT INTO fx_user (username, password, real_name, org_code, status, created_at, updated_at)
+        VALUES (#{username}, #{password}, #{realName}, #{orgCode}, #{status}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxUser">
+        UPDATE fx_user
+        SET username = #{username},
+            real_name = #{realName},
+            org_code = #{orgCode},
+            status = #{status},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE fx_user
+        SET password = #{password},
+            updated_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+    <delete id="deleteByUserId">
+        DELETE FROM fx_user WHERE user_id = #{userId}
+    </delete>
+
+    <select id="selectByCondition" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_user
+        <where>
+            <if test="username != null and username != ''">
+                AND username LIKE CONCAT('%', #{username}, '%')
+            </if>
+            <if test="orgCode != null and orgCode != ''">
+                AND org_code = #{orgCode}
+            </if>
+        </where>
+        ORDER BY user_id
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(1)
+        FROM fx_user
+        <where>
+            <if test="username != null and username != ''">
+                AND username LIKE CONCAT('%', #{username}, '%')
+            </if>
+            <if test="orgCode != null and orgCode != ''">
+                AND org_code = #{orgCode}
+            </if>
+        </where>
+    </select>
+
+</mapper>

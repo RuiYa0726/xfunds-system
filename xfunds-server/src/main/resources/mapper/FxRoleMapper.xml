@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxRoleMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxRole">
+        <id column="role_id" property="roleId"/>
+        <result column="role_code" property="roleCode"/>
+        <result column="role_name" property="roleName"/>
+        <result column="description" property="description"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT role_id, role_code, role_name, description, created_at
+        FROM fx_role
+        ORDER BY role_id
+    </select>
+
+    <select id="selectByRoleCode" resultMap="BaseResultMap">
+        SELECT role_id, role_code, role_name, description, created_at
+        FROM fx_role
+        WHERE role_code = #{roleCode}
+    </select>
+
+</mapper>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxSysParamMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxSysParam">
+        <id column="param_id" property="paramId"/>
+        <result column="param_code" property="paramCode"/>
+        <result column="param_name" property="paramName"/>
+        <result column="param_value" property="paramValue"/>
+        <result column="param_type" property="paramType"/>
+        <result column="description" property="description"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT param_id, param_code, param_name, param_value, param_type, description, updated_at
+        FROM fx_sys_param
+        ORDER BY param_code
+    </select>
+
+    <select id="selectByParamCode" resultMap="BaseResultMap">
+        SELECT param_id, param_code, param_name, param_value, param_type, description, updated_at
+        FROM fx_sys_param
+        WHERE param_code = #{paramCode}
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxSysParam" useGeneratedKeys="true" keyProperty="paramId">
+        INSERT INTO fx_sys_param (param_code, param_name, param_value, param_type, description, updated_at)
+        VALUES (#{paramCode}, #{paramName}, #{paramValue}, #{paramType}, #{description}, NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxSysParam">
+        UPDATE fx_sys_param
+        SET param_name = #{paramName},
+            param_value = #{paramValue},
+            param_type = #{paramType},
+            description = #{description},
+            updated_at = NOW()
+        WHERE param_id = #{paramId}
+    </update>
+
+</mapper>

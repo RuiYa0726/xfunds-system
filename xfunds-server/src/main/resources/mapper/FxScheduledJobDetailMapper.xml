@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxScheduledJobDetailMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxScheduledJobDetail">
+        <id column="detail_id" property="detailId"/>
+        <result column="log_id" property="logId"/>
+        <result column="trade_id" property="tradeId"/>
+        <result column="business_no" property="businessNo"/>
+        <result column="trade_type" property="tradeType"/>
+        <result column="settle_account" property="settleAccount"/>
+        <result column="settle_amount" property="settleAmount"/>
+        <result column="margin_account" property="marginAccount"/>
+        <result column="margin_amount" property="marginAmount"/>
+        <result column="result" property="result"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        detail_id, log_id, trade_id, business_no, trade_type, settle_account, settle_amount,
+        margin_account, margin_amount, result, error_message, created_at
+    </sql>
+
+    <insert id="batchInsert">
+        INSERT INTO fx_scheduled_job_detail (log_id, trade_id, business_no, trade_type,
+            settle_account, settle_amount, margin_account, margin_amount, result, error_message, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.logId}, #{item.tradeId}, #{item.businessNo}, #{item.tradeType},
+             #{item.settleAccount}, #{item.settleAmount}, #{item.marginAccount}, #{item.marginAmount},
+             #{item.result}, #{item.errorMessage}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="selectByLogId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_scheduled_job_detail
+        WHERE log_id = #{logId}
+        ORDER BY detail_id ASC
+    </select>
+
+</mapper>

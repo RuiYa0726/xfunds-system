@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxSwapTradeMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxSwapTrade">
+        <id column="trade_id" property="tradeId"/>
+        <result column="swap_type" property="swapType"/>
+        <result column="near_leg_direction" property="nearLegDirection"/>
+        <result column="near_leg_amount" property="nearLegAmount"/>
+        <result column="near_leg_rate" property="nearLegRate"/>
+        <result column="near_leg_cost_rate" property="nearLegCostRate"/>
+        <result column="near_leg_customer_rate" property="nearLegCustomerRate"/>
+        <result column="near_leg_branch_profit_point" property="nearLegBranchProfitPoint"/>
+        <result column="near_leg_value_date" property="nearLegValueDate"/>
+        <result column="near_leg_account" property="nearLegAccount"/>
+        <result column="near_leg_currency1_account" property="nearLegCurrency1Account"/>
+        <result column="near_leg_currency2_account" property="nearLegCurrency2Account"/>
+        <result column="near_leg_settlement_method" property="nearLegSettlementMethod"/>
+        <result column="far_leg_direction" property="farLegDirection"/>
+        <result column="far_leg_amount" property="farLegAmount"/>
+        <result column="far_leg_rate" property="farLegRate"/>
+        <result column="far_leg_cost_rate" property="farLegCostRate"/>
+        <result column="far_leg_customer_rate" property="farLegCustomerRate"/>
+        <result column="far_leg_branch_profit_point" property="farLegBranchProfitPoint"/>
+        <result column="far_leg_value_date" property="farLegValueDate"/>
+        <result column="far_leg_account" property="farLegAccount"/>
+        <result column="far_leg_currency1_account" property="farLegCurrency1Account"/>
+        <result column="far_leg_currency2_account" property="farLegCurrency2Account"/>
+        <result column="far_leg_settlement_method" property="farLegSettlementMethod"/>
+        <result column="term" property="term"/>
+        <result column="swap_point" property="swapPoint"/>
+        <result column="near_spot_rate" property="nearSpotRate"/>
+        <result column="is_pure_swap" property="isPureSwap"/>
+        <result column="margin_account_id" property="marginAccountId"/>
+        <result column="margin_amount" property="marginAmount"/>
+    </resultMap>
+
+    <select id="selectByTradeId" resultMap="BaseResultMap">
+        SELECT trade_id, swap_type, near_leg_direction, near_leg_amount, near_leg_rate,
+               near_leg_cost_rate, near_leg_customer_rate, near_leg_branch_profit_point,
+               near_leg_value_date, near_leg_account, near_leg_currency1_account, near_leg_currency2_account,
+               near_leg_settlement_method,
+               far_leg_direction, far_leg_amount, far_leg_rate, far_leg_cost_rate, far_leg_customer_rate,
+               far_leg_branch_profit_point, far_leg_value_date, far_leg_account,
+               far_leg_currency1_account, far_leg_currency2_account, far_leg_settlement_method,
+               term, swap_point, near_spot_rate,
+               is_pure_swap, margin_account_id, margin_amount
+        FROM fx_swap_trade
+        WHERE trade_id = #{tradeId}
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxSwapTrade">
+        INSERT INTO fx_swap_trade (trade_id, swap_type, near_leg_direction, near_leg_amount,
+            near_leg_rate, near_leg_cost_rate, near_leg_customer_rate, near_leg_branch_profit_point,
+            near_leg_value_date, near_leg_account, near_leg_currency1_account, near_leg_currency2_account,
+            near_leg_settlement_method,
+            far_leg_direction, far_leg_amount, far_leg_rate, far_leg_cost_rate, far_leg_customer_rate,
+            far_leg_branch_profit_point, far_leg_value_date, far_leg_account,
+            far_leg_currency1_account, far_leg_currency2_account, far_leg_settlement_method,
+            term, swap_point, near_spot_rate, is_pure_swap,
+            margin_account_id, margin_amount)
+        VALUES (#{tradeId}, #{swapType}, #{nearLegDirection}, #{nearLegAmount},
+            #{nearLegRate}, #{nearLegCostRate}, #{nearLegCustomerRate}, #{nearLegBranchProfitPoint},
+            #{nearLegValueDate}, #{nearLegAccount}, #{nearLegCurrency1Account}, #{nearLegCurrency2Account},
+            #{nearLegSettlementMethod},
+            #{farLegDirection}, #{farLegAmount}, #{farLegRate}, #{farLegCostRate}, #{farLegCustomerRate},
+            #{farLegBranchProfitPoint}, #{farLegValueDate}, #{farLegAccount},
+            #{farLegCurrency1Account}, #{farLegCurrency2Account}, #{farLegSettlementMethod},
+            #{term}, #{swapPoint}, #{nearSpotRate}, #{isPureSwap},
+            #{marginAccountId}, #{marginAmount})
+    </insert>
+
+    <delete id="deleteByTradeId">
+        DELETE FROM fx_swap_trade WHERE trade_id = #{tradeId}
+    </delete>
+
+</mapper>
