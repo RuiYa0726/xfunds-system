@@ -21,6 +21,8 @@ public class FxTradeLifecycle {
     private LocalDateTime eventTime;
     /** 操作人ID */
     private Long operatorId;
+    /** 操作人姓名（非数据库列，查询时关联 fx_user 填充） */
+    private String operatorName;
     /** 变更前状态 */
     private String beforeStatus;
     /** 变更后状态 */

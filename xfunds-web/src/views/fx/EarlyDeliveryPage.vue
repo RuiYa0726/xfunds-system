@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getTradeDetail, earlyDelivery, getCustomerAccounts, getSpotQuotes } from '@/api/trade'
+import { getTaskDetail, completeModifyTask } from '@/api/task'
 import { formatTradeType, formatTradeDirection } from '@/utils/constants'
 
 const route = useRoute()
@@ -12,6 +13,10 @@ const loading = ref(false)
 const submitting = ref(false)
 const originalTrade = ref(null)
 const quotes = ref([])
+
+// 编辑模式任务ID（退回经办后重新编辑时由待办列表传入）
+const modifyTaskId = ref(null)
+const isEditMode = computed(() => !!modifyTaskId.value)
 
 // 表单数据
 const form = reactive({
@@ -62,6 +67,37 @@ async function loadOriginalTrade(tradeId) {
     ])
   } catch (e) {
     ElMessage.error('加载原交易失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 编辑模式：加载任务 payload 并回填表单
+async function loadTaskAndOriginalTrade(taskId) {
+  loading.value = true
+  try {
+    const res = await getTaskDetail(taskId)
+    const task = res.data
+    if (!task || !task.payload) {
+      ElMessage.error('任务载荷为空')
+      return
+    }
+    const payload = JSON.parse(task.payload)
+    // 加载原交易
+    const tradeRes = await getTradeDetail(payload.originalTradeId)
+    originalTrade.value = tradeRes.data?.master || tradeRes.data
+    // 回填表单（编辑模式使用 payload 中的数据）
+    form.nearLegCustomerRate = payload.nearLegCustomerRate
+    form.nearLegCostRate = payload.nearLegCostRate
+    form.farLegCustomerRate = payload.farLegCustomerRate
+    form.farLegCostRate = payload.farLegCostRate
+    form.nearLegAccount1 = payload.nearLegAccount1 || ''
+    form.nearLegAccount2 = payload.nearLegAccount2 || ''
+    form.remark = payload.remark || ''
+    // 加载客户账户（账户下拉框需要）
+    await loadCustomerAccounts()
+  } catch (e) {
+    ElMessage.error('加载任务失败')
   } finally {
     loading.value = false
   }
@@ -118,6 +154,11 @@ function getAccountsForCurrency(currency) {
   return customerAccounts.value.filter(a => a.currency === currency)
 }
 
+// 账户下拉框标签：展示账户号、币种和余额
+function accountLabel(account) {
+  return `${account.accountNo} | ${account.currency} | 余额 ${account.balance ?? 0}`
+}
+
 // 提交
 async function handleSubmit() {
   if (!originalTrade.value) {
@@ -126,7 +167,10 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
-    const { base, quote } = splitCurrencyPair(originalTrade.value.currencyPair)
+    // 编辑模式：先完成修改任务，再重新发起
+    if (isEditMode.value) {
+      await completeModifyTask(modifyTaskId.value)
+    }
     const payload = {
       tradeId: originalTrade.value.tradeId || originalTrade.value.id,
       nearLegCustomerRate: form.nearLegCustomerRate,
@@ -140,8 +184,8 @@ async function handleSubmit() {
       remark: form.remark
     }
     await earlyDelivery(payload)
-    ElMessage.success('提前交割操作成功')
-    router.push('/fx/unmatured')
+    ElMessage.success(isEditMode.value ? '重新提交成功' : '提前交割操作成功')
+    router.push(isEditMode.value ? '/fx/todo' : '/fx/unmatured')
   } catch (e) {
     // 错误已在拦截器提示
   } finally {
@@ -150,8 +194,12 @@ async function handleSubmit() {
 }
 
 onMounted(() => {
+  modifyTaskId.value = route.query.taskId || null
   const tradeId = route.query.tradeId
-  if (tradeId) {
+  if (modifyTaskId.value) {
+    // 编辑模式：加载任务 payload 并回填表单
+    loadTaskAndOriginalTrade(modifyTaskId.value)
+  } else if (tradeId) {
     loadOriginalTrade(tradeId)
   } else {
     ElMessage.error('缺少交易ID')
@@ -256,7 +304,7 @@ onMounted(() => {
                   <el-option
                     v-for="acc in getAccountsForCurrency(splitCurrencyPair(originalTrade.currencyPair).base)"
                     :key="acc.accountNo"
-                    :label="`${acc.accountNo} - ${acc.accountType}`"
+                    :label="accountLabel(acc)"
                     :value="acc.accountNo"
                   />
                 </el-select>
@@ -268,7 +316,7 @@ onMounted(() => {
                   <el-option
                     v-for="acc in getAccountsForCurrency(splitCurrencyPair(originalTrade.currencyPair).quote)"
                     :key="acc.accountNo"
-                    :label="`${acc.accountNo} - ${acc.accountType}`"
+                    :label="accountLabel(acc)"
                     :value="acc.accountNo"
                   />
                 </el-select>

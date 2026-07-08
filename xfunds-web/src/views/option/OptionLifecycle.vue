@@ -1,43 +1,37 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  listUnmaturedOptions,
-  closeOption,
   listEuropeanMaturedOptions,
-  abandonOption,
-  premiumSettle,
-  listAmericanMonitoring,
   listAmericanMaturedOptions,
-  executeOption
+  executeOption,
+  abandonOption,
+  getOptionDetail
 } from '@/api/option'
+import { getCustomerAccounts } from '@/api/customer'
 import {
   formatTradeStatus,
   formatOptionDirection,
   formatOptionStyle,
   formatOptionType,
   formatOptionDeliveryType,
+  formatOptionSettlementMethod,
   getStatusTagType
 } from '@/utils/constants'
 
-// 当前激活的 tab
-const activeTab = ref('unmatured')
+// 当前激活的 tab：europeanMatured=欧式交易管理，americanMatured=美式交易管理
+const activeTab = ref('europeanMatured')
 
 // 各 tab 对应的查询接口
 const tabApiMap = {
-  unmatured: listUnmaturedOptions,
   europeanMatured: listEuropeanMaturedOptions,
-  premium: listUnmaturedOptions,
-  americanMonitoring: listAmericanMonitoring,
   americanMatured: listAmericanMaturedOptions
 }
 
 // 查询条件表单
 const queryForm = reactive({
   businessNo: '',
-  customerId: '',
-  optionStyle: '',
-  optionType: ''
+  customerId: ''
 })
 
 // 表格数据与分页
@@ -49,50 +43,89 @@ const pagination = reactive({
   pageSize: 10
 })
 
-// 期权类别下拉选项
-const optionStyleOptions = [
-  { value: '', label: '全部' },
-  { value: 'AMERICAN', label: '美式' },
-  { value: 'EUROPEAN', label: '欧式' }
-]
+// ===== 执行弹窗状态 =====
+const executeVisible = ref(false)
+const executeData = ref(null)
+const executeLoading = ref(false)
+const executing = ref(false)
 
-// 期权种类下拉选项
-const optionTypeOptions = [
-  { value: '', label: '全部' },
-  { value: 'CALL', label: '看涨' },
-  { value: 'PUT', label: '看跌' }
-]
+// ===== 放弃弹窗状态 =====
+const abandonVisible = ref(false)
+const abandonData = ref(null)
+const abandonLoading = ref(false)
+const abandoning = ref(false)
 
-// ===== 操作弹窗公共状态 =====
-const dialogVisible = ref(false)
-const dialogType = ref('')
+// 客户账户列表（用于展示账户号、币种、余额）
+const executeAccounts = ref([])
+const abandonAccounts = ref([])
+
+// 当前操作的行
 const currentRow = ref(null)
-const submitting = ref(false)
-const opFormRef = ref(null)
 
-// 操作弹窗类型 -> 标题映射
-const dialogTitleMap = {
-  close: '平仓',
-  exercise: '执行行权',
-  abandon: '放弃',
-  premiumSettle: '期权费交割'
-}
+// 是否欧式期权（根据执行弹窗数据判断）
+const isEuropeanExecute = computed(() => {
+  return executeData.value?.optionDetail?.optionStyle === 'EUROPEAN'
+})
 
-// 当前弹窗标题
-const dialogTitle = computed(() => dialogTitleMap[dialogType.value] || '')
+// 是否美式期权（根据执行弹窗数据判断）
+const isAmericanExecute = computed(() => {
+  return executeData.value?.optionDetail?.optionStyle === 'AMERICAN'
+})
 
-// 操作表单数据（各操作共用，按需使用字段）
-const opForm = reactive({
-  tradeId: '',
-  closeDate: '',
-  closeAmount: null,
-  closePremium: null,
-  closePnl: null,
-  settlementAccount: '',
-  exerciseDate: '',
-  referenceRate: null,
-  abandonDate: '',
-  remark: ''
+// 是否欧式期权（根据放弃弹窗数据判断）
+const isEuropeanAbandon = computed(() => {
+  return abandonData.value?.optionDetail?.optionStyle === 'EUROPEAN'
+})
+
+// 是否美式期权（根据放弃弹窗数据判断）
+const isAmericanAbandon = computed(() => {
+  return abandonData.value?.optionDetail?.optionStyle === 'AMERICAN'
+})
+
+// 执行弹窗：基础货币名称（从货币对派生）：USD/CNY → USD
+const executeBaseCurrencyName = computed(() => {
+  const pair = executeData.value?.master?.currencyPair || ''
+  const parts = pair.split('/')
+  return parts.length === 2 ? parts[0].trim().toUpperCase() : ''
+})
+
+// 执行弹窗：报价货币名称（从货币对派生）：USD/CNY → CNY
+const executeQuoteCurrencyName = computed(() => {
+  const pair = executeData.value?.master?.currencyPair || ''
+  const parts = pair.split('/')
+  return parts.length === 2 ? parts[1].trim().toUpperCase() : ''
+})
+
+// 执行弹窗：面值金额
+const executeNotionalAmount = computed(() => executeData.value?.master?.notionalAmount ?? '-')
+
+// 放弃弹窗：基础货币名称（从货币对派生）：USD/CNY → USD
+const abandonBaseCurrencyName = computed(() => {
+  const pair = abandonData.value?.master?.currencyPair || ''
+  const parts = pair.split('/')
+  return parts.length === 2 ? parts[0].trim().toUpperCase() : ''
+})
+
+// 放弃弹窗：报价货币名称（从货币对派生）：USD/CNY → CNY
+const abandonQuoteCurrencyName = computed(() => {
+  const pair = abandonData.value?.master?.currencyPair || ''
+  const parts = pair.split('/')
+  return parts.length === 2 ? parts[1].trim().toUpperCase() : ''
+})
+
+// 放弃弹窗：面值金额
+const abandonNotionalAmount = computed(() => abandonData.value?.master?.notionalAmount ?? '-')
+
+// 执行弹窗标题
+const executeTitle = computed(() => {
+  const style = executeData.value?.optionDetail?.optionStyle
+  return style === 'AMERICAN' ? '美式期权 - 执行行权' : style === 'EUROPEAN' ? '欧式期权 - 执行行权' : '期权 - 执行行权'
+})
+
+// 放弃弹窗标题
+const abandonTitle = computed(() => {
+  const style = abandonData.value?.optionDetail?.optionStyle
+  return style === 'AMERICAN' ? '美式期权 - 放弃期权' : style === 'EUROPEAN' ? '欧式期权 - 放弃期权' : '期权 - 放弃期权'
 })
 
 // 获取今日日期字符串 YYYY-MM-DD
@@ -104,42 +137,35 @@ function getTodayStr() {
   return `${y}-${m}-${day}`
 }
 
-// 根据操作类型返回对应的表单校验规则
-function getOpRules(type) {
-  const requiredRule = (msg) => [{ required: true, message: msg, trigger: 'blur' }]
-  switch (type) {
-    case 'close':
-      return {
-        closeDate: requiredRule('请选择平仓日'),
-        closeAmount: requiredRule('请输入平仓金额'),
-        settlementAccount: requiredRule('请输入交割账户')
-      }
-    case 'exercise':
-      return {
-        exerciseDate: requiredRule('请选择行权日'),
-        referenceRate: [
-          requiredRule('请输入参考汇率'),
-          { type: 'number', min: 0.00000001, message: '参考汇率必须大于0', trigger: 'blur' }
-        ],
-        settlementAccount: requiredRule('请输入交割账户')
-      }
-    case 'abandon':
-      return {
-        abandonDate: requiredRule('请选择放弃日')
-      }
-    case 'premiumSettle':
-      return {
-        settlementAccount: requiredRule('请输入交割账户')
-      }
-    default:
-      return {}
-  }
+// 根据账户ID查找账户信息（从指定账户列表中匹配）
+function findAccount(accountIdStr, accountsList) {
+  if (!accountIdStr || !accountsList.length) return null
+  return accountsList.find((a) => String(a.accountId) === String(accountIdStr))
 }
 
-// 当前操作表单的校验规则
-const opRules = computed(() => getOpRules(dialogType.value))
+// 执行弹窗的账户显示标签：账号 | 币种 | 余额
+function executeAccountLabel(accountIdStr) {
+  const acc = findAccount(accountIdStr, executeAccounts.value)
+  if (!acc) return accountIdStr || '-'
+  return `${acc.accountNo} | ${acc.currency} | 余额 ${acc.balance ?? 0}`
+}
 
-// 组装查询参数：合并过滤条件与分页，空值不传
+// 放弃弹窗的账户显示标签：账号 | 币种 | 余额
+function abandonAccountLabel(accountIdStr) {
+  const acc = findAccount(accountIdStr, abandonAccounts.value)
+  if (!acc) return accountIdStr || '-'
+  return `${acc.accountNo} | ${acc.currency} | 余额 ${acc.balance ?? 0}`
+}
+
+// 涨跌方向中文
+function priceDirectionText(optionType) {
+  // CALL→涨，PUT→跌
+  if (optionType === 'CALL') return '涨'
+  if (optionType === 'PUT') return '跌'
+  return '-'
+}
+
+// 组装查询参数
 function buildQueryParams() {
   const params = {
     pageNum: pagination.pageNum,
@@ -147,8 +173,6 @@ function buildQueryParams() {
   }
   if (queryForm.businessNo) params.businessNo = queryForm.businessNo
   if (queryForm.customerId) params.customerId = queryForm.customerId
-  if (queryForm.optionStyle) params.optionStyle = queryForm.optionStyle
-  if (queryForm.optionType) params.optionType = queryForm.optionType
   return params
 }
 
@@ -168,18 +192,16 @@ async function loadData() {
   }
 }
 
-// 点击查询按钮：重置页码后查询
+// 点击查询按钮
 function handleQuery() {
   pagination.pageNum = 1
   loadData()
 }
 
-// 点击重置按钮：清空查询条件并重新查询
+// 点击重置按钮
 function handleReset() {
   queryForm.businessNo = ''
   queryForm.customerId = ''
-  queryForm.optionStyle = ''
-  queryForm.optionType = ''
   pagination.pageNum = 1
   loadData()
 }
@@ -197,112 +219,160 @@ function handleSizeChange(size) {
   loadData()
 }
 
-// 切换 tab 时重置查询并重新加载
+// 切换 tab 时重新加载
 function handleTabChange() {
   pagination.pageNum = 1
   loadData()
 }
 
-// 重置操作表单所有字段
-function resetOpForm() {
-  opForm.tradeId = ''
-  opForm.closeDate = ''
-  opForm.closeAmount = null
-  opForm.closePremium = null
-  opForm.closePnl = null
-  opForm.settlementAccount = ''
-  opForm.exerciseDate = ''
-  opForm.referenceRate = null
-  opForm.abandonDate = ''
-  opForm.remark = ''
-}
-
-// 打开操作弹窗：记录当前行与操作类型，重置表单并预填默认值
-function openOperationDialog(row, type) {
+// 打开执行弹窗：加载交易详情和客户账户
+async function openExecuteDialog(row) {
   currentRow.value = row
-  dialogType.value = type
-  resetOpForm()
-  opForm.tradeId = row.tradeId || row.id
-  if (type === 'exercise') {
-    opForm.exerciseDate = getTodayStr()
-    opForm.referenceRate = row.referenceRate ?? null
-  }
-  if (type === 'close') {
-    opForm.closeDate = getTodayStr()
-  }
-  if (type === 'abandon') {
-    opForm.abandonDate = getTodayStr()
-  }
-  dialogVisible.value = true
-}
-
-// 根据操作类型组装提交数据
-function buildOpPayload() {
-  const tradeId = currentRow.value?.tradeId || currentRow.value?.id
-  const base = { tradeId, remark: opForm.remark }
-  switch (dialogType.value) {
-    case 'close':
-      return {
-        ...base,
-        closeDate: opForm.closeDate,
-        closeAmount: opForm.closeAmount,
-        closePremium: opForm.closePremium,
-        closePnl: opForm.closePnl,
-        settlementAccount: opForm.settlementAccount
+  executeVisible.value = true
+  executeLoading.value = true
+  executeData.value = null
+  executeAccounts.value = []
+  try {
+    // 加载期权交易详情（主表 + 期权子表 + 生命周期 + 审批日志）
+    const res = await getOptionDetail(row.tradeId)
+    executeData.value = res.data
+    // 加载客户账户列表（用于显示账户号、币种、余额）
+    const master = res.data?.master
+    if (master?.customerId) {
+      try {
+        const accRes = await getCustomerAccounts(master.customerId)
+        executeAccounts.value = accRes.data || []
+      } catch (e) {
+        executeAccounts.value = []
       }
-    case 'exercise':
-      return {
-        ...base,
-        exerciseDate: opForm.exerciseDate,
-        referenceRate: opForm.referenceRate,
-        settlementAccount: opForm.settlementAccount
-      }
-    case 'abandon':
-      return {
-        ...base,
-        abandonDate: opForm.abandonDate
-      }
-    case 'premiumSettle':
-      return {
-        ...base,
-        settlementAccount: opForm.settlementAccount
-      }
-    default:
-      return base
-  }
-}
-
-// 根据操作类型调用对应接口
-async function callOperationApi(payload) {
-  const apiMap = {
-    close: closeOption,
-    exercise: executeOption,
-    abandon: abandonOption,
-    premiumSettle
-  }
-  const api = apiMap[dialogType.value]
-  if (!api) throw new Error('未知操作类型')
-  return api(payload)
-}
-
-// 提交操作：校验表单 -> 调用接口 -> 成功后刷新
-async function handleSubmitOperation() {
-  if (!opFormRef.value) return
-  await opFormRef.value.validate(async (valid) => {
-    if (!valid) return
-    submitting.value = true
-    try {
-      const payload = buildOpPayload()
-      await callOperationApi(payload)
-      ElMessage.success(`${dialogTitle.value}操作成功`)
-      dialogVisible.value = false
-      loadData()
-    } catch (e) {
-      // 错误信息已由 request 拦截器统一提示
-    } finally {
-      submitting.value = false
     }
-  })
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    executeLoading.value = false
+  }
+}
+
+// 关闭执行弹窗
+function closeExecuteDialog() {
+  executeVisible.value = false
+  executeData.value = null
+  executeAccounts.value = []
+  currentRow.value = null
+}
+
+// 打开放弃弹窗：加载交易详情和客户账户
+async function openAbandonDialog(row) {
+  currentRow.value = row
+  abandonVisible.value = true
+  abandonLoading.value = true
+  abandonData.value = null
+  abandonAccounts.value = []
+  try {
+    // 加载期权交易详情（主表 + 期权子表 + 生命周期 + 审批日志）
+    const res = await getOptionDetail(row.tradeId)
+    abandonData.value = res.data
+    // 加载客户账户列表（用于显示账户号、币种、余额）
+    const master = res.data?.master
+    if (master?.customerId) {
+      try {
+        const accRes = await getCustomerAccounts(master.customerId)
+        abandonAccounts.value = accRes.data || []
+      } catch (e) {
+        abandonAccounts.value = []
+      }
+    }
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    abandonLoading.value = false
+  }
+}
+
+// 关闭放弃弹窗
+function closeAbandonDialog() {
+  abandonVisible.value = false
+  abandonData.value = null
+  abandonAccounts.value = []
+  currentRow.value = null
+}
+
+// 点击执行：确认后调用 executeOption API（审批制：提交后等待复核通过才扣款）
+async function handleExecute() {
+  const master = executeData.value?.master
+  const option = executeData.value?.optionDetail
+  if (!master || !option) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确认提交执行该期权交易？提交后将等待复核通过后扣除 ${executeBaseCurrencyName.value} 账户冻结的 ${executeNotionalAmount.value} 面值。`,
+      '确认提交执行',
+      {
+        confirmButtonText: '确认提交',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch (e) {
+    // 用户取消
+    return
+  }
+
+  executing.value = true
+  try {
+    // 行权日=今天，参考汇率=交易录入时的即期汇率
+    const payload = {
+      tradeId: master.tradeId,
+      exerciseDate: getTodayStr(),
+      referenceRate: option.referenceRate || master.spotRate,
+      remark: '存续期管理执行行权'
+    }
+    await executeOption(payload)
+    ElMessage.success('行权申请已提交，等待复核通过后扣除账户冻结金额')
+    executeVisible.value = false
+    loadData()
+  } catch (e) {
+    // 错误已由拦截器提示（如"欧式期权未到执行日"等）
+  } finally {
+    executing.value = false
+  }
+}
+
+// 点击放弃：确认后调用 abandonOption API（审批制：提交后等待复核通过才解冻）
+async function handleAbandon() {
+  const master = abandonData.value?.master
+  if (!master) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确认提交放弃该期权交易？提交后将等待复核通过后解冻 ${abandonBaseCurrencyName.value} 账户冻结的 ${abandonNotionalAmount.value} 面值。`,
+      '确认提交放弃',
+      {
+        confirmButtonText: '确认提交',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch (e) {
+    // 用户取消
+    return
+  }
+
+  abandoning.value = true
+  try {
+    const payload = {
+      tradeId: master.tradeId,
+      remark: '存续期管理放弃期权'
+    }
+    await abandonOption(payload)
+    ElMessage.success('放弃申请已提交，等待复核通过后解冻账户余额')
+    abandonVisible.value = false
+    loadData()
+  } catch (e) {
+    // 错误已由拦截器提示
+  } finally {
+    abandoning.value = false
+  }
 }
 
 onMounted(() => {
@@ -318,11 +388,8 @@ onMounted(() => {
       </template>
 
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-        <el-tab-pane label="未到期交易管理" name="unmatured" />
-        <el-tab-pane label="欧式到期交易管理" name="europeanMatured" />
-        <el-tab-pane label="期权费交割" name="premium" />
-        <el-tab-pane label="美式期权监控" name="americanMonitoring" />
-        <el-tab-pane label="美式到期交易管理" name="americanMatured" />
+        <el-tab-pane label="欧式交易管理" name="europeanMatured" />
+        <el-tab-pane label="美式交易管理" name="americanMatured" />
       </el-tabs>
 
       <!-- 查询条件表单 -->
@@ -332,26 +399,6 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="客户号">
           <el-input v-model="queryForm.customerId" placeholder="请输入客户号" clearable />
-        </el-form-item>
-        <el-form-item label="期权类别">
-          <el-select v-model="queryForm.optionStyle" placeholder="全部" clearable style="width: 140px">
-            <el-option
-              v-for="opt in optionStyleOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="期权种类">
-          <el-select v-model="queryForm.optionType" placeholder="全部" clearable style="width: 140px">
-            <el-option
-              v-for="opt in optionTypeOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
-          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="handleQuery">查询</el-button>
@@ -371,16 +418,9 @@ onMounted(() => {
         <el-table-column prop="businessNo" label="业务编号" width="160" fixed />
         <el-table-column prop="currencyPair" label="货币对" width="100" />
         <el-table-column label="买卖方向" width="90">
-          <template #default="{ row }">{{ formatOptionDirection(row.buyerSeller) }}</template>
+          <template #default="{ row }">{{ formatOptionDirection(row.tradeDirection) }}</template>
         </el-table-column>
-        <el-table-column label="期权类别" width="90">
-          <template #default="{ row }">{{ formatOptionStyle(row.optionStyle) }}</template>
-        </el-table-column>
-        <el-table-column label="期权种类" width="90">
-          <template #default="{ row }">{{ formatOptionType(row.optionType) }}</template>
-        </el-table-column>
-        <el-table-column prop="strikePrice" label="执行价格" width="110" />
-        <el-table-column prop="notionalAmount" label="原始签约金额" width="130" />
+        <el-table-column label="面值（币种1）" width="130" prop="notionalAmount" />
         <el-table-column prop="tradeDate" label="交易日" width="110" />
         <el-table-column prop="maturityDate" label="到期日" width="110" />
         <el-table-column label="交割类型" width="90">
@@ -390,54 +430,18 @@ onMounted(() => {
         <el-table-column prop="customerName" label="客户名称" min-width="140" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusTagType(row.optionStatus || row.status)" size="small">
-              {{ formatTradeStatus(row.optionStatus || row.status) }}
+            <el-tag :type="getStatusTagType(row.status)" size="small">
+              {{ formatTradeStatus(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <!-- 未到期：平仓 -->
-            <el-button
-              v-if="activeTab === 'unmatured'"
-              type="warning"
-              size="small"
-              link
-              @click="openOperationDialog(row, 'close')"
-            >
-              平仓
-            </el-button>
-            <!-- 欧式到期/美式到期：执行、放弃、平仓 -->
-            <template v-if="activeTab === 'europeanMatured' || activeTab === 'americanMatured'">
-              <el-button type="success" size="small" link @click="openOperationDialog(row, 'exercise')">
-                执行
-              </el-button>
-              <el-button type="danger" size="small" link @click="openOperationDialog(row, 'abandon')">
-                放弃
-              </el-button>
-              <el-button type="warning" size="small" link @click="openOperationDialog(row, 'close')">
-                平仓
-              </el-button>
-            </template>
-            <!-- 期权费交割 -->
-            <el-button
-              v-if="activeTab === 'premium'"
-              type="primary"
-              size="small"
-              link
-              @click="openOperationDialog(row, 'premiumSettle')"
-            >
-              期权费交割
-            </el-button>
-            <!-- 美式期权监控：执行 -->
-            <el-button
-              v-if="activeTab === 'americanMonitoring'"
-              type="success"
-              size="small"
-              link
-              @click="openOperationDialog(row, 'exercise')"
-            >
+            <el-button type="success" size="small" link @click="openExecuteDialog(row)">
               执行
+            </el-button>
+            <el-button type="danger" size="small" link @click="openAbandonDialog(row)">
+              放弃
             </el-button>
           </template>
         </el-table-column>
@@ -458,118 +462,439 @@ onMounted(() => {
       </div>
     </el-card>
 
-    <!-- 操作弹窗 -->
+    <!-- 执行弹窗：展示4个模块的只读信息 + 执行按钮 -->
     <el-dialog
-      v-model="dialogVisible"
-      :title="dialogTitle"
-      width="520px"
+      v-model="executeVisible"
+      :title="executeTitle"
+      width="900px"
       destroy-on-close
+      @close="closeExecuteDialog"
     >
-      <el-form
-        ref="opFormRef"
-        :model="opForm"
-        :rules="opRules"
-        label-width="110px"
-      >
-        <!-- 平仓字段 -->
-        <template v-if="dialogType === 'close'">
-          <el-form-item label="平仓日" prop="closeDate">
-            <el-date-picker
-              v-model="opForm.closeDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="选择平仓日"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="平仓金额" prop="closeAmount">
-            <el-input-number
-              v-model="opForm.closeAmount"
-              :precision="2"
-              :step="100"
-              :min="0"
-              :controls="false"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="平仓权利金" prop="closePremium">
-            <el-input-number
-              v-model="opForm.closePremium"
-              :precision="2"
-              :step="100"
-              :controls="false"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="平仓损益" prop="closePnl">
-            <el-input-number
-              v-model="opForm.closePnl"
-              :precision="2"
-              :step="100"
-              :controls="false"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="交割账户" prop="settlementAccount">
-            <el-input v-model="opForm.settlementAccount" placeholder="请输入交割账户" />
-          </el-form-item>
+      <div v-loading="executeLoading">
+        <template v-if="executeData">
+          <!-- 模块一：客户信息 -->
+          <el-divider content-position="left">客户信息</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="客户号" label-width="100px">
+                <el-input :model-value="executeData.master?.customerId || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="客户名称" label-width="100px">
+                <el-input :model-value="executeData.master?.customerName || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item :label="`${executeBaseCurrencyName}账户`" label-width="100px">
+                <el-input :model-value="executeAccountLabel(executeData.optionDetail?.currency1Account)" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item :label="`${executeQuoteCurrencyName}账户`" label-width="100px">
+                <el-input :model-value="executeAccountLabel(executeData.optionDetail?.currency2Account)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权费账户" label-width="100px">
+                <el-input :model-value="executeAccountLabel(executeData.optionDetail?.premiumAccountId)" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 模块二：基础信息 -->
+          <el-divider content-position="left">基础信息</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="业务编号" label-width="100px">
+                <el-input :model-value="executeData.master?.businessNo || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="买卖方向" label-width="100px">
+                <el-input :model-value="formatOptionDirection(executeData.master?.tradeDirection)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="货币对" label-width="100px">
+                <el-input :model-value="executeData.master?.currencyPair || '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item :label="`面值（${executeBaseCurrencyName}）`" label-width="100px">
+                <el-input :model-value="executeData.optionDetail?.notionalAmount ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="涨跌方向" label-width="100px">
+                <el-input :model-value="priceDirectionText(executeData.optionDetail?.optionType)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="即期汇率" label-width="100px">
+                <el-input :model-value="executeData.master?.spotRate ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="执行价格" label-width="100px">
+                <el-input :model-value="executeData.optionDetail?.strikePrice ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 模块三：交易要素（美式和欧式不同） -->
+          <el-divider content-position="left">交易要素</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="交易机构" label-width="100px">
+                <el-input :model-value="executeData.master?.branchName || executeData.master?.branchCode || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权类别" label-width="100px">
+                <el-input :model-value="formatOptionStyle(executeData.optionDetail?.optionStyle)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="行权时点" label-width="100px">
+                <el-input model-value="15:00:00" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="交易日" label-width="100px">
+                <el-input :model-value="executeData.master?.tradeDate || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <!-- 美式期权：观察期开始日、观察期结束日、交割类型、期权费交割日、交割方式 -->
+            <template v-if="isAmericanExecute">
+              <el-col :span="8">
+                <el-form-item label="观察期开始日" label-width="100px">
+                  <el-input :model-value="executeData.optionDetail?.observationStartDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="观察期结束日" label-width="100px">
+                  <el-input :model-value="executeData.optionDetail?.observationEndDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+            <!-- 欧式期权：到期日、交割类型、交割日、天数、期权费交割日、交割方式 -->
+            <template v-if="isEuropeanExecute">
+              <el-col :span="8">
+                <el-form-item label="到期日" label-width="100px">
+                  <el-input :model-value="executeData.master?.maturityDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="交割类型" label-width="100px">
+                <el-input :model-value="formatOptionDeliveryType(executeData.master?.deliveryType)" disabled />
+              </el-form-item>
+            </el-col>
+            <!-- 欧式期权额外显示交割日和天数 -->
+            <template v-if="isEuropeanExecute">
+              <el-col :span="8">
+                <el-form-item label="交割日" label-width="100px">
+                  <el-input :model-value="executeData.master?.valueDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="天数" label-width="100px">
+                  <el-input :model-value="executeData.optionDetail?.days ?? '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+            <!-- 美式期权额外显示期权费交割日 -->
+            <template v-if="isAmericanExecute">
+              <el-col :span="8">
+                <el-form-item label="期权费交割日" label-width="100px">
+                  <el-input :model-value="executeData.optionDetail?.premiumValueDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+          </el-row>
+          <el-row :gutter="20">
+            <!-- 欧式期权：期权费交割日和交割方式 -->
+            <template v-if="isEuropeanExecute">
+              <el-col :span="8">
+                <el-form-item label="期权费交割日" label-width="100px">
+                  <el-input :model-value="executeData.optionDetail?.premiumValueDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+            <el-col :span="8">
+              <el-form-item label="交割方式" label-width="100px">
+                <el-input :model-value="formatOptionSettlementMethod(executeData.optionDetail?.settlementMethod)" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 模块四：费用/报价 -->
+          <el-divider content-position="left">费用/报价</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="期权费" label-width="100px">
+                <el-input :model-value="executeData.optionDetail?.premiumAmount ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权费账户" label-width="100px">
+                <el-input :model-value="executeAccountLabel(executeData.optionDetail?.premiumAccountId)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权费币种" label-width="100px">
+                <el-input :model-value="executeData.optionDetail?.premiumCurrency || '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 执行说明：使用具体币种和金额 -->
+          <el-alert
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-top: 16px"
+          >
+            <template #default>
+              点击"执行"按钮后，将提交行权申请。复核通过后将扣除 {{ executeBaseCurrencyName }} 账户对应冻结的 {{ executeNotionalAmount }} 面值。
+            </template>
+          </el-alert>
         </template>
+      </div>
 
-        <!-- 执行行权字段 -->
-        <template v-if="dialogType === 'exercise'">
-          <el-form-item label="行权日" prop="exerciseDate">
-            <el-date-picker
-              v-model="opForm.exerciseDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="选择行权日"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="参考汇率" prop="referenceRate">
-            <el-input-number
-              v-model="opForm.referenceRate"
-              :precision="8"
-              :step="0.0001"
-              :min="0"
-              :controls="false"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="交割账户" prop="settlementAccount">
-            <el-input v-model="opForm.settlementAccount" placeholder="请输入交割账户" />
-          </el-form-item>
-        </template>
-
-        <!-- 放弃字段 -->
-        <template v-if="dialogType === 'abandon'">
-          <el-form-item label="放弃日" prop="abandonDate">
-            <el-date-picker
-              v-model="opForm.abandonDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="选择放弃日"
-              style="width: 100%"
-            />
-          </el-form-item>
-        </template>
-
-        <!-- 期权费交割字段 -->
-        <template v-if="dialogType === 'premiumSettle'">
-          <el-form-item label="交割账户" prop="settlementAccount">
-            <el-input v-model="opForm.settlementAccount" placeholder="请输入交割账户" />
-          </el-form-item>
-        </template>
-
-        <!-- 公共备注字段 -->
-        <el-form-item label="备注" prop="remark">
-          <el-input v-model="opForm.remark" type="textarea" :rows="2" placeholder="请输入备注" />
-        </el-form-item>
-      </el-form>
-
+      <!-- 弹窗底部：执行按钮 -->
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmitOperation">确定</el-button>
+        <el-button @click="closeExecuteDialog">关闭</el-button>
+        <el-button type="success" :loading="executing" @click="handleExecute">执行</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 放弃弹窗：展示4个模块的只读信息 + 放弃按钮 -->
+    <el-dialog
+      v-model="abandonVisible"
+      :title="abandonTitle"
+      width="900px"
+      destroy-on-close
+      @close="closeAbandonDialog"
+    >
+      <div v-loading="abandonLoading">
+        <template v-if="abandonData">
+          <!-- 模块一：客户信息 -->
+          <el-divider content-position="left">客户信息</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="客户号" label-width="100px">
+                <el-input :model-value="abandonData.master?.customerId || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="客户名称" label-width="100px">
+                <el-input :model-value="abandonData.master?.customerName || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item :label="`${abandonBaseCurrencyName}账户`" label-width="100px">
+                <el-input :model-value="abandonAccountLabel(abandonData.optionDetail?.currency1Account)" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item :label="`${abandonQuoteCurrencyName}账户`" label-width="100px">
+                <el-input :model-value="abandonAccountLabel(abandonData.optionDetail?.currency2Account)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权费账户" label-width="100px">
+                <el-input :model-value="abandonAccountLabel(abandonData.optionDetail?.premiumAccountId)" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 模块二：基础信息 -->
+          <el-divider content-position="left">基础信息</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="业务编号" label-width="100px">
+                <el-input :model-value="abandonData.master?.businessNo || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="买卖方向" label-width="100px">
+                <el-input :model-value="formatOptionDirection(abandonData.master?.tradeDirection)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="货币对" label-width="100px">
+                <el-input :model-value="abandonData.master?.currencyPair || '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item :label="`面值（${abandonBaseCurrencyName}）`" label-width="100px">
+                <el-input :model-value="abandonData.optionDetail?.notionalAmount ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="涨跌方向" label-width="100px">
+                <el-input :model-value="priceDirectionText(abandonData.optionDetail?.optionType)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="即期汇率" label-width="100px">
+                <el-input :model-value="abandonData.master?.spotRate ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="执行价格" label-width="100px">
+                <el-input :model-value="abandonData.optionDetail?.strikePrice ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 模块三：交易要素（美式和欧式不同） -->
+          <el-divider content-position="left">交易要素</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="交易机构" label-width="100px">
+                <el-input :model-value="abandonData.master?.branchName || abandonData.master?.branchCode || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权类别" label-width="100px">
+                <el-input :model-value="formatOptionStyle(abandonData.optionDetail?.optionStyle)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="行权时点" label-width="100px">
+                <el-input model-value="15:00:00" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="交易日" label-width="100px">
+                <el-input :model-value="abandonData.master?.tradeDate || '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <!-- 美式期权：观察期开始日、观察期结束日、交割类型、期权费交割日、交割方式 -->
+            <template v-if="isAmericanAbandon">
+              <el-col :span="8">
+                <el-form-item label="观察期开始日" label-width="100px">
+                  <el-input :model-value="abandonData.optionDetail?.observationStartDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="观察期结束日" label-width="100px">
+                  <el-input :model-value="abandonData.optionDetail?.observationEndDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+            <!-- 欧式期权：到期日、交割类型、交割日、天数、期权费交割日、交割方式 -->
+            <template v-if="isEuropeanAbandon">
+              <el-col :span="8">
+                <el-form-item label="到期日" label-width="100px">
+                  <el-input :model-value="abandonData.master?.maturityDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+          </el-row>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="交割类型" label-width="100px">
+                <el-input :model-value="formatOptionDeliveryType(abandonData.master?.deliveryType)" disabled />
+              </el-form-item>
+            </el-col>
+            <!-- 欧式期权额外显示交割日和天数 -->
+            <template v-if="isEuropeanAbandon">
+              <el-col :span="8">
+                <el-form-item label="交割日" label-width="100px">
+                  <el-input :model-value="abandonData.master?.valueDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="天数" label-width="100px">
+                  <el-input :model-value="abandonData.optionDetail?.days ?? '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+            <!-- 美式期权额外显示期权费交割日 -->
+            <template v-if="isAmericanAbandon">
+              <el-col :span="8">
+                <el-form-item label="期权费交割日" label-width="100px">
+                  <el-input :model-value="abandonData.optionDetail?.premiumValueDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+          </el-row>
+          <el-row :gutter="20">
+            <!-- 欧式期权：期权费交割日和交割方式 -->
+            <template v-if="isEuropeanAbandon">
+              <el-col :span="8">
+                <el-form-item label="期权费交割日" label-width="100px">
+                  <el-input :model-value="abandonData.optionDetail?.premiumValueDate || '-'" disabled />
+                </el-form-item>
+              </el-col>
+            </template>
+            <el-col :span="8">
+              <el-form-item label="交割方式" label-width="100px">
+                <el-input :model-value="formatOptionSettlementMethod(abandonData.optionDetail?.settlementMethod)" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 模块四：费用/报价 -->
+          <el-divider content-position="left">费用/报价</el-divider>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item label="期权费" label-width="100px">
+                <el-input :model-value="abandonData.optionDetail?.premiumAmount ?? '-'" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权费账户" label-width="100px">
+                <el-input :model-value="abandonAccountLabel(abandonData.optionDetail?.premiumAccountId)" disabled />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="期权费币种" label-width="100px">
+                <el-input :model-value="abandonData.optionDetail?.premiumCurrency || '-'" disabled />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <!-- 放弃说明：使用具体币种和金额 -->
+          <el-alert
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-top: 16px"
+          >
+            <template #default>
+              点击"确认提交"按钮后，将提交放弃申请。复核通过后将解冻 {{ abandonBaseCurrencyName }} 账户对应冻结的 {{ abandonNotionalAmount }} 面值，余额不变。
+            </template>
+          </el-alert>
+        </template>
+      </div>
+
+      <!-- 弹窗底部：放弃按钮 -->
+      <template #footer>
+        <el-button @click="closeAbandonDialog">关闭</el-button>
+        <el-button type="danger" :loading="abandoning" @click="handleAbandon">放弃</el-button>
       </template>
     </el-dialog>
   </div>
@@ -578,17 +903,19 @@ onMounted(() => {
 <style scoped>
 .page-container {
   padding: 16px;
-  height: 100%;
 }
+
 .page-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: bold;
 }
+
 .query-form {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
+
 .pagination-wrapper {
-  margin-top: 12px;
+  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
 }

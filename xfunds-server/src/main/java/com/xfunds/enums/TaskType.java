@@ -17,7 +17,9 @@ public enum TaskType {
     QUOTE_CHECK("报价复核"),
     MODIFY("修改交易"),
     EARLY_DEFAULT("提前违约"),
-    EARLY_DELIVERY("提前交割");
+    EARLY_DELIVERY("提前交割"),
+    ROLLOVER_ORIGINAL("原价展期"),
+    ROLLOVER_MARKET("市价展期");
 
     private final String description;
 

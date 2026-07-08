@@ -13,7 +13,9 @@ export const useUserStore = defineStore('user', () => {
       username: '',
       realName: '',
       orgCode: '',
-      roles: []
+      orgName: '',
+      roles: [],
+      roleNames: []
     }
   )
 
@@ -53,7 +55,7 @@ export const useUserStore = defineStore('user', () => {
       // 即使接口失败也清除本地态
     }
     token.value = ''
-    userInfo.value = { userId: '', username: '', realName: '', orgCode: '', roles: [] }
+    userInfo.value = { userId: '', username: '', realName: '', orgCode: '', orgName: '', roles: [], roleNames: [] }
     localStorage.removeItem('xfunds_token')
     localStorage.removeItem('xfunds_user')
   }

@@ -18,6 +18,10 @@ const businessDate = ref('')
 const dateLoading = ref(false)
 const dateSubmitting = ref(false)
 
+// 允许在界面上展示的参数编码白名单
+// 其他功能性参数仍保留在数据库中供系统使用，但不在此页面展示
+const VISIBLE_PARAM_CODES = ['SYS_NAME', 'SYS_VERSION', 'TRADE_BUSINESS_NO_PREFIX']
+
 // 编辑弹窗状态
 const editVisible = ref(false)
 const submitting = ref(false)
@@ -35,12 +39,14 @@ const editRules = {
   paramValue: [{ required: true, message: '请输入参数值', trigger: 'blur' }]
 }
 
-// 加载系统参数列表
+// 加载系统参数列表（仅展示白名单中的参数）
 async function loadData() {
   loading.value = true
   try {
     const res = await getSysParams()
-    tableData.value = res.data?.records || res.data?.list || res.data || []
+    const allParams = res.data?.records || res.data?.list || res.data || []
+    // 只展示业务可配置的系统参数，其他功能性参数不在界面显示
+    tableData.value = allParams.filter((item) => VISIBLE_PARAM_CODES.includes(item.paramCode))
   } catch (e) {
     tableData.value = []
   } finally {

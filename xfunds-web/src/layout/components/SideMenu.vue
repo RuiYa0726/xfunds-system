@@ -26,8 +26,7 @@ const menuGroups = [
       { name: 'OptionWorkbench', path: '/option/workbench', label: '期权工作台' },
       { name: 'OptionTradeEntry', path: '/option/entry', label: '期权交易录入' },
       { name: 'OptionLifecycle', path: '/option/lifecycle', label: '存续期管理' },
-      { name: 'OptionQuery', path: '/option/query', label: '期权交易查询' },
-      { name: 'OptionParam', path: '/option/param', label: '期权参数管理' }
+      { name: 'OptionQuery', path: '/option/query', label: '期权交易查询' }
     ]
   },
   {

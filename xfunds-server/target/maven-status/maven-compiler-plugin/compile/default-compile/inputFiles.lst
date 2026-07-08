@@ -32,6 +32,7 @@ D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\FxQuoteService.jav
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\impl\FxTradeServiceImpl.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\config\EncodingConfig.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\FullDefaultRequest.java
+D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\RolloverMarketTaskPayload.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\EarlyDeliveryTaskPayload.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\MarginService.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\enums\TradeStatus.java
@@ -89,7 +90,6 @@ D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\controller\SysParamControl
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\enums\DeliveryType.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\controller\ScheduledJobController.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\controller\TaskController.java
-D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\entity\FxOptionParam.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\impl\FxQuoteServiceImpl.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\OptionCloseRequest.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\controller\FxTradeController.java
@@ -100,6 +100,7 @@ D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\impl\TradeLifecycl
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\scheduler\FxQuoteRefreshScheduler.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\enums\OptionType.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\enums\TradeType.java
+D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\RolloverOriginalTaskPayload.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\mapper\FxRoleMapper.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\UserSaveRequest.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\entity\FxRole.java
@@ -134,10 +135,8 @@ D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\mapper\FxOrgMapper.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\MarginCalcRequest.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\entity\FxApprovalLog.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\enums\RoleCode.java
-D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\controller\OptionParamController.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\impl\CreditServiceImpl.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\impl\TradeLifecycleServiceImpl.java
-D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\mapper\FxOptionParamMapper.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\common\Constants.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\entity\FxScheduledJobDetail.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\service\impl\TaskServiceImpl.java
@@ -152,6 +151,7 @@ D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\controller\HealthControlle
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\OptionAbandonRequest.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\mapper\FxOptionTradeMapper.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\mapper\FxSpotTradeMapper.java
+D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\MarginAccountCreateRequest.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\entity\FxCustomer.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\mapper\FxTradeMasterMapper.java
 D:\trae\xfunds\xfunds-server\src\main\java\com\xfunds\dto\OrgTreeVO.java

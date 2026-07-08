@@ -38,6 +38,8 @@ public class TradeResponse {
     private String settlementMethod;
     /** 特殊交易类型 */
     private String specialTradeType;
+    /** 原交易类型 */
+    private String originalTradeType;
     /** 经办人ID */
     private Long makerId;
     /** 复核人ID */

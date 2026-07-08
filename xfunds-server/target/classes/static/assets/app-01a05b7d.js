@@ -1,0 +1,1 @@
+import{R as d,e}from"./index-be92b7d5.js";const c=d("app",()=>{const o=e(!1),l=e(!1),t=e(!1),s=e(0);function a(){o.value=!o.value}function n(){l.value=!l.value}function u(){t.value=!t.value}function f(){s.value+=1}return{collapsed:o,hidden:l,todoCollapsed:t,todoRefreshCount:s,toggleCollapse:a,toggleHidden:n,toggleTodoCollapse:u,refreshTodos:f}});export{c as u};

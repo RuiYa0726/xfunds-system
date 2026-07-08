@@ -9,6 +9,7 @@ import com.xfunds.entity.FxCustomerAccount;
 import com.xfunds.entity.FxCustomerBalance;
 
 import java.util.List;
+import java.math.BigDecimal;
 
 /**
  * 客户服务接口
@@ -65,4 +66,9 @@ public interface FxCustomerService {
      * 人工调整保证金账户余额（记录保证金流水，与定时交割任务联动同一张表）
      */
     void adjustMarginAccountBalance(MarginAccountAdjustRequest request, Long operatorId);
+
+    /**
+     * 新增保证金账户
+     */
+    void addMarginAccount(String customerId, String currency, BigDecimal initialBalance);
 }

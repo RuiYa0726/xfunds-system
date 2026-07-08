@@ -93,15 +93,9 @@ public class OptionTradeEntryRequest {
     @NotBlank(message = "交割方式不能为空")
     private String settlementMethod;
 
-    /** 名义金额 */
-    @NotNull(message = "名义金额不能为空")
+    /** 面值（币种1）：交易金额 */
+    @NotNull(message = "面值不能为空")
     private BigDecimal notionalAmount;
-
-    /** 货币1金额 */
-    private BigDecimal currency1Amount;
-
-    /** 货币2金额 */
-    private BigDecimal currency2Amount;
 
     /** 期权费金额 */
     private BigDecimal premiumAmount;

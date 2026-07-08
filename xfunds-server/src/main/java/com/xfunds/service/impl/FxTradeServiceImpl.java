@@ -28,6 +28,7 @@ import com.xfunds.mapper.FxCustomerMapper;
 import com.xfunds.mapper.FxForwardTradeMapper;
 import com.xfunds.mapper.FxMarginAccountMapper;
 import com.xfunds.mapper.FxOrgMapper;
+import com.xfunds.mapper.FxOptionTradeMapper;
 import com.xfunds.mapper.FxSpotTradeMapper;
 import com.xfunds.mapper.FxSwapTradeMapper;
 import com.xfunds.mapper.FxTradeMasterMapper;
@@ -76,6 +77,9 @@ public class FxTradeServiceImpl implements FxTradeService {
 
     @Autowired
     private FxSwapTradeMapper fxSwapTradeMapper;
+
+    @Autowired
+    private FxOptionTradeMapper fxOptionTradeMapper;
 
     @Autowired
     private FxCustomerMapper fxCustomerMapper;
@@ -428,6 +432,8 @@ public class FxTradeServiceImpl implements FxTradeService {
             vo.setForwardDetail(fxForwardTradeMapper.selectByTradeId(tradeId));
         } else if (TradeType.SWAP.name().equals(tradeType)) {
             vo.setSwapDetail(fxSwapTradeMapper.selectByTradeId(tradeId));
+        } else if (TradeType.OPTION.name().equals(tradeType)) {
+            vo.setOptionDetail(fxOptionTradeMapper.selectByTradeId(tradeId));
         }
 
         vo.setLifecycleList(tradeLifecycleService.listByTradeId(tradeId));
@@ -458,6 +464,7 @@ public class FxTradeServiceImpl implements FxTradeService {
 
     /**
      * 分页查询客户交易：支持业务编号、客户ID、交易类型、状态、特殊交易类型过滤
+     * 外汇工作台客户交易查询仅包含即期/远期/掉期，不包含期权交易（期权在期权交易管理模块查询）
      */
     @Override
     public PageResponse<TradeResponse> listCustomerTrades(String businessNo, String customerId, String tradeType,
@@ -466,11 +473,17 @@ public class FxTradeServiceImpl implements FxTradeService {
         Map<String, Object> params = new HashMap<>();
         params.put("businessNo", businessNo);
         params.put("customerId", customerId);
-        params.put("tradeType", tradeType);
         params.put("status", status);
         params.put("specialTradeType", specialTradeType);
         params.put("offset", (pageNum - 1) * pageSize);
         params.put("pageSize", pageSize);
+        // 外汇工作台仅查询即期/远期/掉期交易，排除期权交易
+        if (tradeType != null && !tradeType.isEmpty()) {
+            params.put("tradeType", tradeType);
+        } else {
+            // 未指定交易类型时，默认排除期权交易
+            params.put("tradeTypeList", java.util.Arrays.asList("SPOT", "FORWARD", "SWAP"));
+        }
 
         long total = fxTradeMasterMapper.countByCondition(params);
         List<FxTradeMaster> list = fxTradeMasterMapper.selectByCondition(params);
@@ -592,6 +605,7 @@ public class FxTradeServiceImpl implements FxTradeService {
         resp.setMaturityDate(master.getMaturityDate() != null ? master.getMaturityDate().toString() : null);
         resp.setSettlementMethod(master.getSettlementMethod());
         resp.setSpecialTradeType(master.getSpecialTradeType());
+        resp.setOriginalTradeType(master.getOriginalTradeType());
         resp.setMakerId(master.getMakerId());
         resp.setCheckerId(master.getCheckerId());
         resp.setCreatedAt(master.getCreatedAt());
@@ -668,7 +682,15 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setFxPurposeCode(req.getFxPurposeCode());
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
-        fxTradeMasterMapper.update(master);
+        // 清空复核人信息，重置为经办态
+        master.setCheckerId(null);
+        master.setCheckTime(null);
+        int updated = fxTradeMasterMapper.updateAllFields(master);
+        if (updated == 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "交易已被他人修改，请刷新后重试");
+        }
+        // 同步内存中的版本号，使后续 submitToCheck 的乐观锁更新能匹配
+        master.setVersion(master.getVersion() + 1);
 
         // 更新即期子表（先删除后插入）
         fxSpotTradeMapper.deleteByTradeId(tradeId);
@@ -747,7 +769,15 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setFxPurposeCode(req.getFxPurposeCode());
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
-        fxTradeMasterMapper.update(master);
+        // 清空复核人信息，重置为经办态
+        master.setCheckerId(null);
+        master.setCheckTime(null);
+        int updated = fxTradeMasterMapper.updateAllFields(master);
+        if (updated == 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "交易已被他人修改，请刷新后重试");
+        }
+        // 同步内存中的版本号，使后续 submitToCheck 的乐观锁更新能匹配
+        master.setVersion(master.getVersion() + 1);
 
         // 更新远期子表（先删除后插入）
         fxForwardTradeMapper.deleteByTradeId(tradeId);
@@ -818,7 +848,15 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setFxPurposeCode(req.getFxPurposeCode());
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
-        fxTradeMasterMapper.update(master);
+        // 清空复核人信息，重置为经办态
+        master.setCheckerId(null);
+        master.setCheckTime(null);
+        int updated = fxTradeMasterMapper.updateAllFields(master);
+        if (updated == 0) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "交易已被他人修改，请刷新后重试");
+        }
+        // 同步内存中的版本号，使后续 submitToCheck 的乐观锁更新能匹配
+        master.setVersion(master.getVersion() + 1);
 
         // 更新掉期子表（先删除后插入）
         fxSwapTradeMapper.deleteByTradeId(tradeId);

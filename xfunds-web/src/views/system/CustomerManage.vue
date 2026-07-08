@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { getCustomerList, saveCustomer, getCustomerAccounts, addCustomerAccount, updateCustomerAccount, getCustomerMarginAccounts, adjustMarginAccount } from '@/api/customer'
+import { getCustomerList, saveCustomer, getCustomerAccounts, addCustomerAccount, updateCustomerAccount, getCustomerMarginAccounts, adjustMarginAccount, addMarginAccount } from '@/api/customer'
 
 // 客户列表数据与分页
 const tableData = ref([])
@@ -121,6 +121,18 @@ const marginBalanceForm = reactive({
   newBalance: null,
   remark: ''
 })
+
+// 新增保证金账户弹窗状态
+const addMarginVisible = ref(false)
+const addMarginSubmitting = ref(false)
+const addMarginFormRef = ref(null)
+const addMarginForm = reactive({
+  currency: '',
+  initialBalance: null
+})
+const addMarginRules = {
+  currency: [{ required: true, message: '请输入币种', trigger: 'blur' }]
+}
 
 // 组装查询参数
 function buildQueryParams() {
@@ -347,6 +359,33 @@ async function handleSubmitMarginBalance() {
   }
 }
 
+// 打开新增保证金账户弹窗
+function openAddMarginDialog() {
+  addMarginForm.currency = ''
+  addMarginForm.initialBalance = null
+  addMarginVisible.value = true
+}
+
+// 提交新增保证金账户
+async function handleSubmitAddMargin() {
+  if (!addMarginFormRef.value) return
+  await addMarginFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    addMarginSubmitting.value = true
+    try {
+      await addMarginAccount(currentCustomerId.value, { ...addMarginForm })
+      ElMessage.success('保证金账户新增成功')
+      addMarginVisible.value = false
+      // 刷新保证金账户列表
+      openMarginDialog({ customerId: currentCustomerId.value })
+    } catch (e) {
+      // 错误信息已由 request 拦截器统一提示
+    } finally {
+      addMarginSubmitting.value = false
+    }
+  })
+}
+
 onMounted(() => {
   loadData()
 })
@@ -523,6 +562,7 @@ onMounted(() => {
             </template>
           </el-table-column>
           <el-table-column prop="balance" label="余额" width="160" />
+          <el-table-column prop="frozenAmount" label="冻结金额" width="160" />
           <el-table-column label="操作" width="120">
             <template #default="{ row }">
               <el-button type="primary" size="small" link @click="openTradeBalanceEdit(row)">调整余额</el-button>
@@ -588,6 +628,9 @@ onMounted(() => {
     >
       <div v-loading="marginLoading">
         <div class="account-toolbar">
+          <el-button type="primary" :icon="Plus" size="small" @click="openAddMarginDialog">
+            新增保证金账户
+          </el-button>
           <span class="account-hint">保证金余额与定时交割任务联动：审批通过扣减、交割成功退还、交割失败没收</span>
         </div>
         <el-table :data="marginList" border stripe size="small" style="width: 100%">
@@ -681,6 +724,40 @@ onMounted(() => {
       <template #footer>
         <el-button @click="marginBalanceVisible = false">取消</el-button>
         <el-button type="primary" :loading="marginBalanceSubmitting" @click="handleSubmitMarginBalance">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新增保证金账户弹窗 -->
+    <el-dialog
+      v-model="addMarginVisible"
+      title="新增保证金账户"
+      width="480px"
+      destroy-on-close
+    >
+      <el-form
+        ref="addMarginFormRef"
+        :model="addMarginForm"
+        :rules="addMarginRules"
+        label-width="100px"
+      >
+        <el-form-item label="币种" prop="currency">
+          <el-input v-model="addMarginForm.currency" placeholder="如 USD" />
+        </el-form-item>
+        <el-form-item label="初始余额">
+          <el-input-number
+            v-model="addMarginForm.initialBalance"
+            :precision="2"
+            :step="100"
+            :min="0"
+            :controls="false"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="addMarginVisible = false">取消</el-button>
+        <el-button type="primary" :loading="addMarginSubmitting" @click="handleSubmitAddMargin">保存</el-button>
       </template>
     </el-dialog>
   </div>

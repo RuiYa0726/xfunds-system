@@ -11,6 +11,7 @@ import com.xfunds.mapper.FxScheduledJobDetailMapper;
 import com.xfunds.mapper.FxScheduledJobLogMapper;
 import com.xfunds.mapper.FxTradeMasterMapper;
 import com.xfunds.service.FxQuoteService;
+import com.xfunds.service.OptionTradeService;
 import com.xfunds.service.ScheduledJobService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +58,9 @@ public class ScheduledJobServiceImpl implements ScheduledJobService {
 
     @Autowired
     private FxQuoteService fxQuoteService;
+
+    @Autowired
+    private OptionTradeService optionTradeService;
 
     /** 防止到期交割任务并发执行（自动与手动触发互斥） */
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -216,6 +220,12 @@ public class ScheduledJobServiceImpl implements ScheduledJobService {
         try {
             log.info("[牌价刷新] 触发类型={}，开始刷新牌价", triggerType);
             fxQuoteService.refreshQuotes();
+            // 牌价刷新后同步更新期权参考汇率，用于期权价内提醒监听
+            try {
+                optionTradeService.updateReferenceRates();
+            } catch (Exception ex) {
+                log.warn("[牌价刷新] 更新期权参考汇率失败：{}", ex.getMessage());
+            }
             jobLog.setTotalCount(1);
             jobLog.setSuccessCount(1);
             jobLog.setFailCount(0);

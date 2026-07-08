@@ -103,6 +103,12 @@ const routes = [
         meta: { title: '期权交易录入' }
       },
       {
+        path: 'option/review',
+        name: 'OptionTradeReview',
+        component: () => import('@/views/option/OptionTradeReview.vue'),
+        meta: { title: '期权交易复核' }
+      },
+      {
         path: 'option/lifecycle',
         name: 'OptionLifecycle',
         component: () => import('@/views/option/OptionLifecycle.vue'),
@@ -113,12 +119,6 @@ const routes = [
         name: 'OptionQuery',
         component: () => import('@/views/option/OptionQuery.vue'),
         meta: { title: '期权交易查询' }
-      },
-      {
-        path: 'option/param',
-        name: 'OptionParam',
-        component: () => import('@/views/option/OptionParam.vue'),
-        meta: { title: '期权参数管理' }
       },
       // 公共管理
       {

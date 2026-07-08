@@ -12,6 +12,8 @@ import com.xfunds.mapper.FxOrgMapper;
 import com.xfunds.mapper.FxTaskMapper;
 import com.xfunds.mapper.FxTradeMasterMapper;
 import com.xfunds.mapper.FxUserMapper;
+import com.xfunds.mapper.FxOptionTradeMapper;
+import com.xfunds.entity.FxOptionTrade;
 import com.xfunds.service.TaskService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,9 @@ public class TaskServiceImpl implements TaskService {
 
     @Autowired
     private FxUserMapper fxUserMapper;
+
+    @Autowired
+    private FxOptionTradeMapper fxOptionTradeMapper;
 
     @Autowired
     private FxOrgMapper fxOrgMapper;
@@ -135,6 +140,15 @@ public class TaskServiceImpl implements TaskService {
     }
 
     /**
+     * 判断指定交易是否已存在待处理（PENDING/CLAIMED）的生命周期任务
+     * 防止同一交易在审批期间被重复提交放弃/执行/期权费交割
+     */
+    @Override
+    public boolean hasPendingLifecycleTask(String tradeId, String businessType) {
+        return fxTaskMapper.selectPendingByTradeIdAndBusinessType(tradeId, businessType) != null;
+    }
+
+    /**
      * 查询当前用户的待办任务视图列表：关联交易主表获取业务编号与交易类型，关联用户表获取经办人姓名
      */
     @Override
@@ -154,24 +168,26 @@ public class TaskServiceImpl implements TaskService {
     }
 
     /**
-     * 查询当前用户可见的所有待办任务（包括同机构及上级机构的任务，以及指派给自己的任务）
+     * 查询当前用户可见的所有待办任务
+     * - 系统管理员(admin)：可跨机构查看该角色的所有待办任务
+     * - 其他用户：仅查看本机构下的待办任务（不能跨机构）
+     * 同时合并指派给当前用户的任务
      */
     @Override
     public List<TaskVO> getVisibleTaskVOs(Long userId, String orgCode, String roleCode) {
-        // 1. 获取当前机构及其所有上级机构
-        List<FxOrg> orgs = fxOrgMapper.selectOrgAndParents(orgCode);
-        List<String> orgCodes = new ArrayList<>();
-        for (FxOrg org : orgs) {
-            orgCodes.add(org.getOrgCode());
+        List<FxTask> tasks;
+        if (com.xfunds.common.SecurityUtils.isAdmin()) {
+            // 系统管理员：跨机构查看该角色的所有待办任务
+            tasks = fxTaskMapper.selectByRole(roleCode);
+        } else {
+            // 其他用户：仅查看本机构的待办任务（不能跨机构）
+            tasks = fxTaskMapper.selectByRoleAndOrg(roleCode, orgCode);
         }
 
-        // 2. 查询这些机构下的待办任务
-        List<FxTask> tasks = fxTaskMapper.selectByRoleAndOrgList(roleCode, orgCodes);
-
-        // 3. 查询指派给当前用户的任务
+        // 查询指派给当前用户的任务
         List<FxTask> myTasks = fxTaskMapper.selectActiveByAssigneeId(userId);
 
-        // 4. 合并两个列表，去重
+        // 合并两个列表，去重
         List<FxTask> allTasks = new ArrayList<>();
         // 先添加角色任务
         allTasks.addAll(tasks);
@@ -183,7 +199,7 @@ public class TaskServiceImpl implements TaskService {
             }
         }
 
-        // 5. 转换为VO
+        // 转换为VO
         return convertToVOList(allTasks);
     }
 
@@ -227,6 +243,13 @@ public class TaskServiceImpl implements TaskService {
                         FxUser maker = fxUserMapper.selectByUserId(master.getMakerId());
                         if (maker != null) {
                             vo.setMakerName(maker.getRealName());
+                        }
+                    }
+                    // 期权交易：查询期权类别（美式/欧式）
+                    if ("OPTION".equals(master.getTradeType())) {
+                        FxOptionTrade option = fxOptionTradeMapper.selectByTradeId(task.getTradeId());
+                        if (option != null) {
+                            vo.setOptionStyle(option.getOptionStyle());
                         }
                     }
                 }

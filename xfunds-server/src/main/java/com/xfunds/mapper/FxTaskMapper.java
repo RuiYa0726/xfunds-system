@@ -39,10 +39,22 @@ public interface FxTaskMapper {
                                     @Param("assigneeOrg") String assigneeOrg);
 
     /**
+     * 根据指派角色查询所有待处理任务列表（不限机构，供系统管理员跨机构使用）
+     */
+    List<FxTask> selectByRole(@Param("assigneeRole") String assigneeRole);
+
+    /**
      * 根据角色和机构列表查询待办任务（包括同机构及上级机构）
      */
     List<FxTask> selectByRoleAndOrgList(@Param("assigneeRole") String assigneeRole,
                                         @Param("orgCodes") List<String> orgCodes);
+
+    /**
+     * 根据交易ID和业务类型查询待处理任务（状态为 PENDING 或 CLAIMED）
+     * 用于防止同一交易的同一生命周期操作重复提交
+     */
+    FxTask selectPendingByTradeIdAndBusinessType(@Param("tradeId") String tradeId,
+                                                  @Param("businessType") String businessType);
 
     /**
      * 新增任务

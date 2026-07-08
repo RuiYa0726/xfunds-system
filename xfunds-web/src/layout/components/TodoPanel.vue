@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bell, ArrowRight, ArrowLeft } from '@element-plus/icons-vue'
 import { getMyTasks } from '@/api/task'
-import { formatTaskType, formatTaskStatus } from '@/utils/constants'
+import { formatTaskType, formatTaskStatus, formatTradeType, formatLifecycleOp, lifecycleOpMap } from '@/utils/constants'
 import { useAppStore } from '@/store/app'
 
 const router = useRouter()
@@ -35,20 +35,34 @@ async function loadTodos() {
   }
 }
 
-// 单击待办项跳转待办处理页
+// 单击待办项跳转待办处理页（期权任务跳转期权复核页，其他跳转外汇待办）
 function handleTodoClick(task) {
-  router.push('/fx/todo')
+  if (task.tradeType === 'OPTION') {
+    const tradeId = task.tradeId || task.businessId
+    const taskId = task.taskId || task.id
+    const businessType = task.businessType || ''
+    router.push({ path: '/option/review', query: { tradeId, taskId, businessType } })
+  } else {
+    router.push('/fx/todo')
+  }
 }
 
-// 双击待办项：携带任务信息跳转待办处理页并自动打开处理弹窗
+// 双击待办项：携带任务信息跳转到期权复核页或待办处理页
 function handleTodoDblClick(task) {
-  router.push({
-    path: '/fx/todo',
-    query: {
-      taskId: task.taskId || task.id,
-      tradeId: task.tradeId || ''
-    }
-  })
+  if (task.tradeType === 'OPTION') {
+    const tradeId = task.tradeId || task.businessId
+    const taskId = task.taskId || task.id
+    const businessType = task.businessType || ''
+    router.push({ path: '/option/review', query: { tradeId, taskId, businessType } })
+  } else {
+    router.push({
+      path: '/fx/todo',
+      query: {
+        taskId: task.taskId || task.id,
+        tradeId: task.tradeId || ''
+      }
+    })
+  }
 }
 
 onMounted(() => {
@@ -58,6 +72,23 @@ onMounted(() => {
     loadTodos()
   }, 5000)
 })
+
+// 格式化事件内容：期权生命周期任务显示具体操作（放弃期权/执行期权），期权交易显示欧式/美式
+function formatEventContent(task) {
+  const bt = task && task.businessType
+  // 期权生命周期任务：根据businessType显示具体操作
+  if (task && task.taskType === 'CHECK_LIFECYCLE' && bt && lifecycleOpMap[bt]) {
+    return formatLifecycleOp(bt)
+  }
+  // 期权交易：显示欧式期权/美式期权
+  if (bt === 'OPTION' || (task && task.tradeType === 'OPTION')) {
+    const style = task && task.optionStyle
+    if (style === 'EUROPEAN') return '欧式期权'
+    if (style === 'AMERICAN') return '美式期权'
+    return '期权交易'
+  }
+  return formatTradeType(bt)
+}
 
 // 监听待办任务刷新信号
 watch(
@@ -119,11 +150,11 @@ defineExpose({ loadTodos })
           </div>
           <div class="todo-item-row todo-item-info">
             <span>类型：{{ formatTaskType(task.taskType) }}</span>
-            <span>事件：{{ task.businessType }}</span>
+            <span>事件：{{ formatEventContent(task) }}</span>
           </div>
           <div class="todo-item-row todo-item-info">
             <span>发起人：{{ task.makerName }}</span>
-            <span>受理人：{{ task.assigneeId || '待认领' }}</span>
+            <span>受理人：{{ task.assigneeName || '待认领' }}</span>
           </div>
         </div>
         <el-empty v-if="todoList.length === 0 && !loading" description="暂无待办" />

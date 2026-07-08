@@ -16,6 +16,7 @@ com\xfunds\mapper\FxOrgMapper.class
 com\xfunds\service\OptionTradeService.class
 com\xfunds\entity\FxCustomerAccount.class
 com\xfunds\service\impl\FxOrgServiceImpl.class
+com\xfunds\dto\RolloverMarketTaskPayload.class
 com\xfunds\service\impl\MarginServiceImpl.class
 com\xfunds\service\MarginService.class
 com\xfunds\entity\FxCreditLimit.class
@@ -44,6 +45,7 @@ com\xfunds\dto\LoginRequest.class
 com\xfunds\enums\RoleCode.class
 com\xfunds\entity\FxScheduledJobLog.class
 com\xfunds\enums\SettlementMethod.class
+com\xfunds\dto\MarginAccountCreateRequest.class
 com\xfunds\service\ApprovalLogService.class
 com\xfunds\dto\OptionPremiumSettleRequest.class
 com\xfunds\common\ResultCode.class
@@ -84,6 +86,7 @@ com\xfunds\dto\SpotTradeEntryRequest.class
 com\xfunds\mapper\FxSwapTradeMapper.class
 com\xfunds\service\impl\SysParamServiceImpl.class
 com\xfunds\dto\ForwardTradeEntryRequest.class
+com\xfunds\dto\RolloverOriginalTaskPayload.class
 com\xfunds\controller\FxOrgController.class
 com\xfunds\service\impl\OptionTradeServiceImpl.class
 com\xfunds\enums\QuoteType.class
@@ -109,7 +112,6 @@ com\xfunds\service\SysParamService.class
 com\xfunds\service\impl\FxTradeServiceImpl.class
 com\xfunds\dto\OptionAbandonRequest.class
 com\xfunds\controller\ScheduledJobController.class
-com\xfunds\controller\OptionParamController.class
 com\xfunds\dto\OptionReminderVO.class
 com\xfunds\config\WebMvcConfig.class
 com\xfunds\enums\TradeDirection.class
@@ -137,12 +139,10 @@ com\xfunds\entity\FxOptionTrade.class
 com\xfunds\service\impl\ScheduledJobServiceImpl.class
 com\xfunds\service\CreditService.class
 com\xfunds\entity\FxMarginAccount.class
-com\xfunds\entity\FxOptionParam.class
 com\xfunds\enums\TaskType.class
 com\xfunds\service\FxUserService.class
 com\xfunds\dto\UserVO.class
 com\xfunds\common\Result.class
-com\xfunds\mapper\FxOptionParamMapper.class
 com\xfunds\common\Constants.class
 com\xfunds\controller\SysParamController.class
 com\xfunds\mapper\FxCreditLimitMapper.class

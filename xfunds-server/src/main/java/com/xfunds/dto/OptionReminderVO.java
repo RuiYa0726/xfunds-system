@@ -53,11 +53,8 @@ public class OptionReminderVO {
     /** 交易日 */
     private LocalDate tradeDate;
 
-    /** 货币1金额 */
-    private BigDecimal currency1Amount;
-
-    /** 货币2金额 */
-    private BigDecimal currency2Amount;
+    /** 到期日（欧式期权的到期日 / 美式期权的观察期结束日） */
+    private LocalDate maturityDate;
 
     /** 客户ID */
     private String customerId;

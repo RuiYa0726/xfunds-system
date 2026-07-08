@@ -38,6 +38,8 @@ public class FxOptionTrade {
     private String exerciseFlag;
     /** 是否放弃标志 */
     private String abandonFlag;
+    /** 放弃日（审批通过日期） */
+    private LocalDate abandonDate;
     /** 交割方式：FULL/NET */
     private String settlementMethod;
     /** 买卖方向：买权/卖权 */
@@ -46,12 +48,8 @@ public class FxOptionTrade {
     private String currency1Account;
     /** 货币2账户 */
     private String currency2Account;
-    /** 名义金额 */
+    /** 面值（币种1）：交易金额 */
     private BigDecimal notionalAmount;
-    /** 货币1金额 */
-    private BigDecimal currency1Amount;
-    /** 货币2金额 */
-    private BigDecimal currency2Amount;
     /** 观察开始日 */
     private LocalDate observationStartDate;
     /** 观察结束日 */

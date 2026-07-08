@@ -35,7 +35,7 @@ async function loadOrgOptions() {
   }
 }
 
-// 当前激活的 tab：forward=远期未到期，swapNear=掉期近端未到期，swapFar=掉期远端未到期
+// 当前激活的 tab：forward=远期未到期，swapFar=掉期远端未到期
 const activeTab = ref('forward')
 
 // 查询条件表单
@@ -58,14 +58,12 @@ const pagination = reactive({
 // 各 tab 对应的交易类型参数
 const tabTradeTypeMap = {
   forward: 'FORWARD',
-  swapNear: 'SWAP',
   swapFar: 'SWAP'
 }
 
 // 各 tab 对应的操作按钮配置
 const tabOperationsMap = {
   forward: ['earlyDelivery', 'earlyDefault', 'rolloverOriginal', 'rolloverMarket'],
-  swapNear: ['fullDefault'],
   swapFar: ['earlyDelivery', 'earlyDefault', 'rolloverOriginal', 'rolloverMarket']
 }
 
@@ -375,7 +373,6 @@ onMounted(() => {
 
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
         <el-tab-pane label="远期未到期" name="forward" />
-        <el-tab-pane label="掉期近端未到期" name="swapNear" />
         <el-tab-pane label="掉期远端未到期" name="swapFar" />
       </el-tabs>
 

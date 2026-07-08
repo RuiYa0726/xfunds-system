@@ -44,4 +44,6 @@ public class TaskVO {
     private Long makerId;
     /** 受理人姓名 */
     private String assigneeName;
+    /** 期权类别（AMERICAN/EUROPEAN，仅期权交易有值） */
+    private String optionStyle;
 }

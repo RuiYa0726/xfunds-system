@@ -58,6 +58,12 @@ function handleSelect(row) {
 function handleClose() {
   emit('update:visible', false)
 }
+
+// 客户类型格式化：CORP->对公客户，RETAIL->个人客户
+function formatCustomerType(type) {
+  const map = { CORP: '对公客户', RETAIL: '个人客户' }
+  return map[type] || type || '-'
+}
 </script>
 
 <template>
@@ -93,7 +99,9 @@ function handleClose() {
     >
       <el-table-column prop="customerId" label="客户号" width="140" />
       <el-table-column prop="customerName" label="客户名称" min-width="180" />
-      <el-table-column prop="customerType" label="客户类型" width="100" />
+      <el-table-column label="客户类型" width="120">
+        <template #default="{ row }">{{ formatCustomerType(row.customerType) }}</template>
+      </el-table-column>
       <el-table-column prop="contactPhone" label="联系电话" width="140" />
       <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">

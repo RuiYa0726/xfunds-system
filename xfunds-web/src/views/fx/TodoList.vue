@@ -14,6 +14,8 @@ import {
   formatSpecialTradeType,
   formatSettlementMethod,
   formatSwapType,
+  formatLifecycleOp,
+  lifecycleOpMap,
   getStatusTagType
 } from '@/utils/constants'
 
@@ -42,9 +44,10 @@ const approvalForm = reactive({
 // 审批操作进行中状态
 const approving = ref(false)
 
-// 解析任务载荷（针对提前违约任务）
+// 解析任务载荷（针对提前违约/提前交割/原价展期/市价展期任务）
 const taskPayload = computed(() => {
-  if (currentTask.value?.taskType === 'EARLY_DEFAULT' && currentTask.value?.payload) {
+  const specialTypes = ['EARLY_DEFAULT', 'EARLY_DELIVERY', 'ROLLOVER_ORIGINAL', 'ROLLOVER_MARKET']
+  if (currentTask.value?.payload && specialTypes.includes(currentTask.value?.taskType)) {
     try {
       return JSON.parse(currentTask.value.payload)
     } catch (e) {
@@ -84,9 +87,61 @@ const earlyDeliveryToday = computed(() => {
   return new Date().toISOString().split('T')[0]
 })
 
+// 展期相关计算属性：近端方向与原交易相反（平掉旧交易），远端方向与原交易相同（新远期）
+const rolloverNearLegDirection = computed(() => {
+  const dir = taskPayload.value?.originalTradeDirection
+  return dir === 'BUY' ? 'SELL' : dir === 'SELL' ? 'BUY' : dir
+})
+const rolloverFarLegDirection = computed(() => taskPayload.value?.originalTradeDirection)
+
+// 弹窗标题：根据任务类型动态生成
+const dialogTitle = computed(() => {
+  const t = currentTask.value?.taskType
+  if (t === 'EARLY_DEFAULT') return '提前违约审批'
+  if (t === 'EARLY_DELIVERY') return '提前交割审批'
+  if (t === 'ROLLOVER_ORIGINAL') return '原价展期审批'
+  if (t === 'ROLLOVER_MARKET') return '市价展期审批'
+  return '任务处理'
+})
+
 // 判断是否为修改任务
 function isModifyTask(row) {
   return row && row.taskType === 'MODIFY'
+}
+
+// 判断是否为特殊生命周期任务（提前违约/提前交割/原价展期/市价展期）
+// 这类任务本质上都是复核任务，类型列应显示"复核"，事件内容列显示具体操作
+function isSpecialLifecycleTask(row) {
+  const t = row && row.taskType
+  return ['EARLY_DEFAULT', 'EARLY_DELIVERY', 'ROLLOVER_ORIGINAL', 'ROLLOVER_MARKET'].includes(t)
+}
+
+// 特殊生命周期任务类型集合（用于 MODIFY 任务的事件内容判断）
+const specialTypeSet = ['EARLY_DEFAULT', 'EARLY_DELIVERY', 'ROLLOVER_ORIGINAL', 'ROLLOVER_MARKET']
+
+// 格式化事件内容：特殊任务显示具体操作名称，MODIFY+特殊businessType也显示操作名称，普通任务显示交易类型
+// 期权生命周期任务（CHECK_LIFECYCLE）根据businessType显示"放弃期权/执行期权/期权费交割"
+// 期权交易根据optionStyle显示"欧式期权"或"美式期权"
+function formatEventContent(row) {
+  const bt = row && row.businessType
+  if (isSpecialLifecycleTask(row)) {
+    return formatTaskType(row.taskType)
+  }
+  if (row && row.taskType === 'MODIFY' && specialTypeSet.includes(bt)) {
+    return formatTaskType(bt)
+  }
+  // 期权生命周期任务：根据businessType显示具体操作（放弃期权/执行期权/期权费交割）
+  if (row && row.taskType === 'CHECK_LIFECYCLE' && bt && lifecycleOpMap[bt]) {
+    return formatLifecycleOp(bt)
+  }
+  // 期权交易：根据optionStyle显示欧式期权/美式期权
+  if (bt === 'OPTION' || (row && row.tradeType === 'OPTION')) {
+    const style = row && row.optionStyle
+    if (style === 'EUROPEAN') return '欧式期权'
+    if (style === 'AMERICAN') return '美式期权'
+    return '期权交易'
+  }
+  return formatTradeType(bt)
 }
 
 // 判断是否为提前违约任务
@@ -97,6 +152,16 @@ function isEarlyDefaultTask(row) {
 // 判断是否为提前交割任务
 function isEarlyDeliveryTask(row) {
     return row && row.taskType === "EARLY_DELIVERY";
+}
+
+// 判断是否为原价展期任务
+function isRolloverOriginalTask(row) {
+    return row && row.taskType === "ROLLOVER_ORIGINAL";
+}
+
+// 判断是否为市价展期任务
+function isRolloverMarketTask(row) {
+    return row && row.taskType === "ROLLOVER_MARKET";
 }
 
 // 加载任务列表
@@ -134,6 +199,8 @@ function handleSizeChange(size) {
 }
 
 // 处理修改任务：跳转到编辑页面
+// 退回经办重新编辑时，MODIFY 任务的 businessType 被设为原任务类型
+//   （EARLY_DELIVERY / ROLLOVER_ORIGINAL / ROLLOVER_MARKET 或 SPOT/FORWARD/SWAP）
 function handleModifyTask(row) {
   if (!row) {
     ElMessage.warning('任务信息不完整')
@@ -141,15 +208,36 @@ function handleModifyTask(row) {
   }
   const tradeId = row.tradeId || row.businessId
   const taskId = row.taskId || row.id
-  const tradeType = row.businessType || row.tradeType
+  const businessType = row.businessType || row.tradeType
 
+  // 1. 特殊生命周期任务退回经办：跳转到对应的发起页面，传入 tradeId 和 taskId
+  if (businessType === 'EARLY_DELIVERY') {
+    router.push({ path: '/fx/early-delivery', query: { tradeId, taskId } })
+    return
+  }
+  if (businessType === 'ROLLOVER_ORIGINAL') {
+    router.push({ path: '/fx/rollover', query: { tradeId, taskId, mode: 'ORIGINAL' } })
+    return
+  }
+  if (businessType === 'ROLLOVER_MARKET') {
+    router.push({ path: '/fx/rollover', query: { tradeId, taskId, mode: 'MARKET' } })
+    return
+  }
+  if (businessType === 'EARLY_DEFAULT') {
+    router.push({ path: '/fx/early-default', query: { tradeId, taskId } })
+    return
+  }
+
+  // 2. 普通交易修改：根据交易类型跳转对应的交易录入页面
   let routePath = ''
-  if (tradeType === 'SPOT' || (row.tradeType && row.tradeType.includes('SPOT'))) {
+  if (businessType === 'SPOT' || (row.tradeType && row.tradeType.includes('SPOT'))) {
     routePath = '/fx/spot-entry'
-  } else if (tradeType === 'FORWARD' || (row.tradeType && row.tradeType.includes('FORWARD'))) {
+  } else if (businessType === 'FORWARD' || (row.tradeType && row.tradeType.includes('FORWARD'))) {
     routePath = '/fx/forward-entry'
-  } else if (tradeType === 'SWAP' || (row.tradeType && row.tradeType.includes('SWAP'))) {
+  } else if (businessType === 'SWAP' || (row.tradeType && row.tradeType.includes('SWAP'))) {
     routePath = '/fx/swap-entry'
+  } else if (businessType === 'OPTION' || (row.tradeType && row.tradeType.includes('OPTION'))) {
+    routePath = '/option/entry'
   } else {
     // 默认尝试判断
     if (tradeDetail.value?.master?.tradeType) {
@@ -199,10 +287,19 @@ async function openProcessDialog(row) {
     return
   }
 
+  // 期权交易复核任务：跳转到期权复核页面（与录入页相同但只读，含通过/拒绝/退回/取消）
+  if (row.tradeType === 'OPTION' || row.businessType === 'OPTION') {
+    const tradeId = row.tradeId || row.businessId
+    const taskId = row.taskId || row.id
+    router.push({ path: '/option/review', query: { tradeId, taskId } })
+    return
+  }
+
   processVisible.value = true
-  
-  // 如果是提前违约任务，不需要加载交易详情，直接显示任务载荷
-  if (isEarlyDefaultTask(row)) {
+
+  // 特殊生命周期任务（提前违约/提前交割/原价展期/市价展期）不需要加载交易详情，直接显示任务载荷
+  if (isEarlyDefaultTask(row) || isEarlyDeliveryTask(row)
+      || isRolloverOriginalTask(row) || isRolloverMarketTask(row)) {
     tradeDetail.value = null
     detailLoading.value = false
     return
@@ -318,12 +415,13 @@ onMounted(async () => {
         <el-table-column label="类型" width="120">
           <template #default="{ row }">
             <el-tag v-if="isModifyTask(row)" type="warning" size="small">{{ formatTaskType(row?.taskType) }}</el-tag>
+            <span v-else-if="isSpecialLifecycleTask(row)">复核</span>
             <span v-else>{{ formatTaskType(row?.taskType) }}</span>
           </template>
         </el-table-column>
 
         <el-table-column label="事件内容" width="140">
-          <template #default="{ row }">{{ row?.businessType || '-' }}</template>
+          <template #default="{ row }">{{ formatEventContent(row) }}</template>
         </el-table-column>
         <el-table-column label="发起人" width="120">
           <template #default="{ row }">{{ row?.makerName || '-' }}</template>
@@ -364,7 +462,7 @@ onMounted(async () => {
     <!-- 任务处理弹窗（仅用于审批类任务） -->
     <el-dialog
       v-model="processVisible"
-      :title="isEarlyDefaultTask(currentTask) ? '提前违约审批' : (isEarlyDeliveryTask(currentTask) ? '提前交割审批' : '任务处理')"
+      :title="dialogTitle"
       width="900px"
       destroy-on-close
     >
@@ -543,9 +641,10 @@ onMounted(async () => {
             <el-descriptions-item label="客户号" :label-style="{ width: '120px' }">{{ taskPayload.customerId }}</el-descriptions-item>
             <el-descriptions-item label="客户名称" :label-style="{ width: '120px' }">{{ taskPayload.customerName }}</el-descriptions-item>
             <el-descriptions-item label="货币对" :label-style="{ width: '120px' }">{{ taskPayload.currencyPair }}</el-descriptions-item>
+            <el-descriptions-item label="交易机构" :label-style="{ width: '120px' }">{{ taskPayload.branchName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="原到期日" :label-style="{ width: '120px' }">{{ taskPayload.originalMaturityDate }}</el-descriptions-item>
             <el-descriptions-item label="原交易金额" :label-style="{ width: '120px' }">{{ taskPayload.originalAmount }}</el-descriptions-item>
             <el-descriptions-item label="原交易汇率" :label-style="{ width: '120px' }">{{ taskPayload.originalCustomerRate }}</el-descriptions-item>
-            <el-descriptions-item label="原到期日" :label-style="{ width: '120px' }">{{ taskPayload.originalMaturityDate }}</el-descriptions-item>
           </el-descriptions>
 
           <!-- 近端交易信息 -->
@@ -671,6 +770,290 @@ onMounted(async () => {
               <el-col :span="12">
                 <el-form-item label="远端交割方式">
                   <el-input model-value="无需交割" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+
+          <!-- 备注信息 -->
+          <el-divider content-position="left">备注信息</el-divider>
+          <el-form label-width="120px">
+            <el-form-item label="备注">
+              <el-input :model-value="taskPayload.remark || ''" type="textarea" :rows="3" disabled />
+            </el-form-item>
+          </el-form>
+        </template>
+
+        <!-- 原价展期任务详情展示（全部只读，字段与发起页一致） -->
+        <template v-else-if="isRolloverOriginalTask(currentTask) && taskPayload">
+          <!-- 原交易信息 -->
+          <el-divider content-position="left">原交易信息</el-divider>
+          <el-descriptions :column="2" border size="default">
+            <el-descriptions-item label="业务编号" :label-style="{ width: '120px' }">{{ taskPayload.originalBusinessNo }}</el-descriptions-item>
+            <el-descriptions-item label="客户号" :label-style="{ width: '120px' }">{{ taskPayload.customerId }}</el-descriptions-item>
+            <el-descriptions-item label="客户名称" :label-style="{ width: '120px' }">{{ taskPayload.customerName }}</el-descriptions-item>
+            <el-descriptions-item label="货币对" :label-style="{ width: '120px' }">{{ taskPayload.currencyPair }}</el-descriptions-item>
+            <el-descriptions-item label="交易机构" :label-style="{ width: '120px' }">{{ taskPayload.branchName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="原到期日" :label-style="{ width: '120px' }">{{ taskPayload.originalMaturityDate }}</el-descriptions-item>
+          </el-descriptions>
+
+          <!-- 近端交易信息 -->
+          <el-divider content-position="left">近端交易信息</el-divider>
+          <el-form label-width="120px">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="成本汇率">
+                  <el-input-number :model-value="taskPayload.nearLegCostRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="客户汇率">
+                  <el-input-number :model-value="taskPayload.nearLegCustomerRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="买卖方向">
+                  <el-input :model-value="formatTradeDirection(rolloverNearLegDirection)" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="金额">
+                  <el-input-number :model-value="taskPayload.originalAmount" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="交易日">
+                  <el-input :model-value="earlyDeliveryToday" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="起息日">
+                  <el-input :model-value="taskPayload.originalMaturityDate" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="近端交割方式">
+                  <el-input model-value="无需交割" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+
+          <!-- 远端交易信息 -->
+          <el-divider content-position="left">远端交易信息</el-divider>
+          <el-form label-width="120px">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="成本汇率">
+                  <el-input-number :model-value="taskPayload.farLegCostRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="客户汇率">
+                  <el-input-number :model-value="taskPayload.farLegCustomerRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="买卖方向">
+                  <el-input :model-value="formatTradeDirection(rolloverFarLegDirection)" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="金额">
+                  <el-input-number :model-value="taskPayload.farLegAmount" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="分行收益点">
+                  <el-input-number :model-value="taskPayload.farLegBranchProfitPoint" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="远端交割方式">
+                  <el-input model-value="全额交割" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="远端到期日">
+                  <el-input :model-value="taskPayload.newMaturityDate" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="币种1账户">
+                  <el-input :model-value="taskPayload.farLegCurrency1Account" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="币种2账户">
+                  <el-input :model-value="taskPayload.farLegCurrency2Account" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+
+          <!-- 备注信息 -->
+          <el-divider content-position="left">备注信息</el-divider>
+          <el-form label-width="120px">
+            <el-form-item label="备注">
+              <el-input :model-value="taskPayload.remark || ''" type="textarea" :rows="3" disabled />
+            </el-form-item>
+          </el-form>
+        </template>
+
+        <!-- 市价展期任务详情展示（全部只读，字段与发起页一致） -->
+        <template v-else-if="isRolloverMarketTask(currentTask) && taskPayload">
+          <!-- 原交易信息 -->
+          <el-divider content-position="left">原交易信息</el-divider>
+          <el-descriptions :column="2" border size="default">
+            <el-descriptions-item label="业务编号" :label-style="{ width: '120px' }">{{ taskPayload.originalBusinessNo }}</el-descriptions-item>
+            <el-descriptions-item label="客户号" :label-style="{ width: '120px' }">{{ taskPayload.customerId }}</el-descriptions-item>
+            <el-descriptions-item label="客户名称" :label-style="{ width: '120px' }">{{ taskPayload.customerName }}</el-descriptions-item>
+            <el-descriptions-item label="货币对" :label-style="{ width: '120px' }">{{ taskPayload.currencyPair }}</el-descriptions-item>
+            <el-descriptions-item label="交易机构" :label-style="{ width: '120px' }">{{ taskPayload.branchName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="原到期日" :label-style="{ width: '120px' }">{{ taskPayload.originalMaturityDate }}</el-descriptions-item>
+          </el-descriptions>
+
+          <!-- 近端交易信息（含轧差信息） -->
+          <el-divider content-position="left">近端交易信息</el-divider>
+          <el-form label-width="120px">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="成本汇率">
+                  <el-input-number :model-value="taskPayload.nearLegCostRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="客户汇率">
+                  <el-input-number :model-value="taskPayload.nearLegCustomerRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="买卖方向">
+                  <el-input :model-value="formatTradeDirection(rolloverNearLegDirection)" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="金额">
+                  <el-input-number :model-value="taskPayload.originalAmount" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="交易日">
+                  <el-input :model-value="earlyDeliveryToday" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="起息日">
+                  <el-input :model-value="taskPayload.originalMaturityDate" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="近端交割方式">
+                  <el-input model-value="差额交割" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="客户损益">
+                  <el-input-number :model-value="taskPayload.customerPnl" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="轧差货币">
+                  <el-input :model-value="taskPayload.nettingCurrency" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="轧差账户">
+                  <el-input :model-value="taskPayload.nettingAccount" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="轧差金额">
+                  <el-input-number :model-value="taskPayload.nettingAmount" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-form>
+
+          <!-- 远端交易信息 -->
+          <el-divider content-position="left">远端交易信息</el-divider>
+          <el-form label-width="120px">
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="成本汇率">
+                  <el-input-number :model-value="taskPayload.farLegCostRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="客户汇率">
+                  <el-input-number :model-value="taskPayload.farLegCustomerRate" :precision="4" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="买卖方向">
+                  <el-input :model-value="formatTradeDirection(rolloverFarLegDirection)" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="金额">
+                  <el-input-number :model-value="taskPayload.farLegAmount" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="分行收益点">
+                  <el-input-number :model-value="taskPayload.farLegBranchProfitPoint" :precision="2" :controls="false" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="远端交割方式">
+                  <el-input model-value="全额交割" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="远端到期日">
+                  <el-input :model-value="taskPayload.newMaturityDate" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="币种1账户">
+                  <el-input :model-value="taskPayload.farLegCurrency1Account" disabled style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="币种2账户">
+                  <el-input :model-value="taskPayload.farLegCurrency2Account" disabled style="width: 100%" />
                 </el-form-item>
               </el-col>
             </el-row>

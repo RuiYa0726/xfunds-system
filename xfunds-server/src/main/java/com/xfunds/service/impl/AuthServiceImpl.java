@@ -6,13 +6,18 @@ import com.xfunds.common.ResultCode;
 import com.xfunds.common.SecurityUtils;
 import com.xfunds.dto.LoginRequest;
 import com.xfunds.dto.LoginResponse;
+import com.xfunds.entity.FxOrg;
+import com.xfunds.entity.FxRole;
 import com.xfunds.entity.FxUser;
+import com.xfunds.mapper.FxOrgMapper;
+import com.xfunds.mapper.FxRoleMapper;
 import com.xfunds.mapper.FxUserMapper;
 import com.xfunds.mapper.FxUserRoleMapper;
 import com.xfunds.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,6 +32,12 @@ public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private FxUserRoleMapper fxUserRoleMapper;
+
+    @Autowired
+    private FxOrgMapper fxOrgMapper;
+
+    @Autowired
+    private FxRoleMapper fxRoleMapper;
 
     /**
      * 用户登录：校验用户名密码，生成 token 并缓存用户信息
@@ -53,14 +64,7 @@ public class AuthServiceImpl implements AuthService {
         // 缓存 token 与用户信息
         SecurityUtils.putToken(token, user, roles);
         // 构建登录响应
-        LoginResponse response = new LoginResponse();
-        response.setToken(token);
-        response.setUserId(user.getUserId());
-        response.setUsername(user.getUsername());
-        response.setRealName(user.getRealName());
-        response.setOrgCode(user.getOrgCode());
-        response.setRoles(roles);
-        return response;
+        return buildLoginResponse(token, user, roles);
     }
 
     /**
@@ -73,13 +77,34 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "未登录或登录已过期");
         }
         List<String> roles = SecurityUtils.getRolesByToken(SecurityUtils.getTokenFromRequest());
+        return buildLoginResponse(SecurityUtils.getTokenFromRequest(), user, roles);
+    }
+
+    /**
+     * 构建登录响应：填充用户基本信息、机构名称、角色名称
+     */
+    private LoginResponse buildLoginResponse(String token, FxUser user, List<String> roles) {
         LoginResponse response = new LoginResponse();
-        response.setToken(SecurityUtils.getTokenFromRequest());
+        response.setToken(token);
         response.setUserId(user.getUserId());
         response.setUsername(user.getUsername());
         response.setRealName(user.getRealName());
         response.setOrgCode(user.getOrgCode());
         response.setRoles(roles);
+        // 填充机构名称
+        if (user.getOrgCode() != null) {
+            FxOrg org = fxOrgMapper.selectByOrgCode(user.getOrgCode());
+            response.setOrgName(org != null ? org.getOrgName() : user.getOrgCode());
+        }
+        // 填充角色名称
+        List<String> roleNames = new ArrayList<>();
+        if (roles != null) {
+            for (String roleCode : roles) {
+                FxRole role = fxRoleMapper.selectByRoleCode(roleCode);
+                roleNames.add(role != null ? role.getRoleName() : roleCode);
+            }
+        }
+        response.setRoleNames(roleNames);
         return response;
     }
 

@@ -3,13 +3,19 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getTradeDetail, rolloverOriginal, rolloverMarket, getCustomerAccounts, searchQuotes } from '@/api/trade'
+import { getTaskDetail, completeModifyTask } from '@/api/task'
 import { formatTradeDirection, formatSpecialTradeType } from '@/utils/constants'
 
 const route = useRoute()
 const router = useRouter()
 
-// 展期模式：ORIGINAL=原价展期，MARKET=市价展期
-const rolloverMode = computed(() => route.query.mode || 'ORIGINAL')
+// 编辑模式任务ID（退回经办后重新编辑时由待办列表传入）
+const modifyTaskId = ref(null)
+// 编辑模式下从任务类型推断的展期模式
+const taskResolvedMode = ref(null)
+
+// 展期模式：编辑模式优先使用任务类型推断的模式，否则取路由参数
+const rolloverMode = computed(() => taskResolvedMode.value || route.query.mode || 'ORIGINAL')
 
 // 加载状态
 const loading = ref(false)
@@ -304,6 +310,54 @@ async function loadOriginalTrade() {
   }
 }
 
+// 编辑模式：加载任务 payload 并回填表单
+async function loadTaskAndOriginalTrade(taskId) {
+  loading.value = true
+  try {
+    const res = await getTaskDetail(taskId)
+    const task = res.data
+    if (!task || !task.payload) {
+      ElMessage.error('任务载荷为空')
+      return
+    }
+    const payload = JSON.parse(task.payload)
+    // 根据任务类型推断展期模式
+    if (task.taskType === 'ROLLOVER_MARKET') {
+      taskResolvedMode.value = 'MARKET'
+    } else {
+      taskResolvedMode.value = 'ORIGINAL'
+    }
+    // 加载原交易
+    const tradeRes = await getTradeDetail(payload.originalTradeId)
+    originalTrade.value = tradeRes.data.master
+    // 回填表单
+    form.newMaturityDate = payload.newMaturityDate || ''
+    form.nearLegCostRate = payload.nearLegCostRate
+    form.nearLegCustomerRate = payload.nearLegCustomerRate
+    form.farLegCostRate = payload.farLegCostRate
+    form.farLegCustomerRate = payload.farLegCustomerRate
+    form.farLegAmount = payload.farLegAmount
+    form.farLegBranchProfitPoint = payload.farLegBranchProfitPoint
+    form.farLegCurrency1Account = payload.farLegCurrency1Account || ''
+    form.farLegCurrency2Account = payload.farLegCurrency2Account || ''
+    form.remark = payload.remark || ''
+    // 市价展期额外字段
+    if (taskResolvedMode.value === 'MARKET') {
+      form.nettingCurrency = payload.nettingCurrency || 'CNY'
+      form.nettingAccount = payload.nettingAccount || ''
+    }
+    // 加载客户账户
+    await loadAllAccounts()
+    if (taskResolvedMode.value === 'MARKET') {
+      await loadNettingAccounts()
+    }
+  } catch (e) {
+    ElMessage.error('加载任务失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 // 账户下拉标签
 function accountLabel(account) {
   return `${account.accountNo} | ${account.currency} | 余额 ${account.balance ?? 0}`
@@ -345,6 +399,10 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
+    // 编辑模式：先完成修改任务，再重新发起
+    if (modifyTaskId.value) {
+      await completeModifyTask(modifyTaskId.value)
+    }
     if (isMarketMode.value) {
       const payload = {
         tradeId: originalTrade.value.tradeId,
@@ -364,7 +422,7 @@ async function handleSubmit() {
         remark: form.remark
       }
       await rolloverMarket(payload)
-      ElMessage.success('市价展期操作成功')
+      ElMessage.success(modifyTaskId.value ? '重新提交成功' : '市价展期操作成功')
     } else {
       const payload = {
         tradeId: originalTrade.value.tradeId,
@@ -380,9 +438,9 @@ async function handleSubmit() {
         remark: form.remark
       }
       await rolloverOriginal(payload)
-      ElMessage.success('原价展期操作成功')
+      ElMessage.success(modifyTaskId.value ? '重新提交成功' : '原价展期操作成功')
     }
-    router.push('/fx/unmatured')
+    router.push(modifyTaskId.value ? '/fx/todo' : '/fx/unmatured')
   } catch (e) {
     // 错误由拦截器处理
   } finally {
@@ -414,7 +472,13 @@ watch(() => form.nettingCurrency, () => {
 })
 
 onMounted(() => {
-  loadOriginalTrade()
+  modifyTaskId.value = route.query.taskId || null
+  if (modifyTaskId.value) {
+    // 编辑模式：加载任务 payload 并回填表单
+    loadTaskAndOriginalTrade(modifyTaskId.value)
+  } else {
+    loadOriginalTrade()
+  }
 })
 </script>
 

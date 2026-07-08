@@ -117,6 +117,15 @@ public class SecurityUtils {
     }
 
     /**
+     * 判断当前用户是否为系统管理员（admin）
+     * 系统管理员可经办、复核、跨机构操作
+     */
+    public static boolean isAdmin() {
+        FxUser user = getCurrentUser();
+        return user != null && "admin".equals(user.getUsername());
+    }
+
+    /**
      * 获取当前 HTTP 请求对象
      */
     private static HttpServletRequest getCurrentRequest() {

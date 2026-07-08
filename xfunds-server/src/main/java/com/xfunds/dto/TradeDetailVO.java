@@ -31,6 +31,9 @@ public class TradeDetailVO {
     /** 掉期交易明细（tradeType=SWAP 时有值） */
     private Object swapDetail;
 
+    /** 期权交易明细（tradeType=OPTION 时有值） */
+    private Object optionDetail;
+
     /** 生命周期事件列表 */
     private List<FxTradeLifecycle> lifecycleList;
 

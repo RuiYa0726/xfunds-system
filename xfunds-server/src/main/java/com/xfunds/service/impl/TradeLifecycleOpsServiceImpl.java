@@ -12,6 +12,8 @@ import com.xfunds.dto.EarlyDeliveryTaskPayload;
 import com.xfunds.dto.FullDefaultRequest;
 import com.xfunds.dto.MarginSupplementRequest;
 import com.xfunds.dto.RolloverMarketRequest;
+import com.xfunds.dto.RolloverMarketTaskPayload;
+import com.xfunds.dto.RolloverOriginalTaskPayload;
 import com.xfunds.dto.RolloverRequest;
 import com.xfunds.entity.FxForwardTrade;
 import com.xfunds.entity.FxMarginAccount;
@@ -38,10 +40,12 @@ import com.xfunds.mapper.FxTradeMasterMapper;
 import com.xfunds.mapper.FxCustomerAccountMapper;
 import com.xfunds.service.ApprovalLogService;
 import com.xfunds.service.MarginService;
+import com.xfunds.service.OptionTradeService;
 import com.xfunds.service.TaskService;
 import com.xfunds.service.TradeLifecycleOpsService;
 import com.xfunds.service.TradeLifecycleService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +53,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -97,6 +102,10 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
     private MarginService marginService;
 
     @Autowired
+    @Lazy
+    private OptionTradeService optionTradeService;
+
+    @Autowired
     private FxCustomerAccountMapper fxCustomerAccountMapper;
 
     @Autowired
@@ -123,6 +132,8 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         }
 
         FxTask task = validateTask(taskId, tradeId);
+        // 非系统管理员不能跨机构复核
+        validateTaskOrg(task);
 
         // 判断任务类型
         if (TaskType.EARLY_DELIVERY.name().equals(task.getTaskType())) {
@@ -132,6 +143,19 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         if (TaskType.EARLY_DEFAULT.name().equals(task.getTaskType())) {
             // 处理提前违约任务
             return processEarlyDefaultApproval(task, currentUserId, currentUser, comment);
+        }
+        if (TaskType.ROLLOVER_ORIGINAL.name().equals(task.getTaskType())) {
+            // 处理原价展期任务
+            return processRolloverOriginalApproval(task, currentUserId, currentUser, comment);
+        }
+        if (TaskType.ROLLOVER_MARKET.name().equals(task.getTaskType())) {
+            // 处理市价展期任务
+            return processRolloverMarketApproval(task, currentUserId, currentUser, comment);
+        }
+
+        // 期权生命周期任务（CHECK_LIFECYCLE）：放弃期权/执行期权/期权费交割
+        if (TaskType.CHECK_LIFECYCLE.name().equals(task.getTaskType())) {
+            return processLifecycleCheckApproval(task, currentUserId, currentUser, comment);
         }
 
         // 处理普通交易复核
@@ -165,6 +189,11 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         // 保证金交易：审批通过进入生效态时扣除保证金（交割成功退还，交割失败没收）
         if (!needAuthorize) {
             deductMarginOnApproval(master, currentUserId);
+        }
+
+        // 期权交易：审批通过时冻结面值金额、扣除期权费
+        if (!needAuthorize && TradeType.OPTION.name().equals(master.getTradeType())) {
+            optionTradeService.handleOptionApproval(master, currentUserId);
         }
 
         // 记录审批日志
@@ -249,6 +278,11 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
             // 生成掉期交易
             String swapTradeId = generateSwapForEarlyDelivery(original, payload, currentUserId);
 
+            // 记录生成掉期交易的生命周期事件
+            tradeLifecycleService.recordEvent(swapTradeId, "EARLY_DELIVERY", currentUserId,
+                    null, TradeStatus.ACTIVE.name(), payload.getOriginalAmount(), payload.getNearLegCustomerRate(),
+                    original.getTradeId(), "提前交割自动生成掉期交易（已生效）");
+
             // 完成提前交割任务
             taskService.completeTask(task.getTaskId(), currentUserId);
 
@@ -317,7 +351,68 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
     }
 
     /**
-     * 复核拒绝：交易状态置为已拒绝，记录审批日志与生命周期事件，完成任务
+     * 处理期权生命周期任务（CHECK_LIFECYCLE）的复核通过：
+     * - ABANDON（放弃期权）：审批通过时执行解冻、设置放弃标志与放弃日、状态置为已放弃
+     * - EXERCISE（执行期权）：审批通过时执行扣款、设置行权标志与行权日、状态置为已行权
+     * - PREMIUM_SETTLE（期权费交割）：已在提交时执行完毕，审批通过只需记录日志并完成任务
+     */
+    private String processLifecycleCheckApproval(FxTask task, Long currentUserId, FxUser currentUser, String comment) {
+        String tradeId = task.getTradeId();
+        String businessType = task.getBusinessType();
+
+        if ("ABANDON".equals(businessType)) {
+            // 放弃期权审批通过：执行解冻、设置放弃标志与放弃日、状态置为已放弃
+            optionTradeService.processAbandonApproval(tradeId, currentUserId, comment);
+
+            // 记录审批日志
+            FxTradeMaster master = fxTradeMasterMapper.selectByTradeId(tradeId);
+            approvalLogService.recordLog(tradeId, Constants.NODE_CHECK, currentUserId,
+                    currentUser != null ? currentUser.getRealName() : null,
+                    SecurityUtils.getCurrentOrgCode(), Constants.DECISION_APPROVE, comment,
+                    TradeStatus.ACTIVE.name(), TradeStatus.ABANDONED.name());
+
+            // 完成复核任务
+            taskService.completeTask(task.getTaskId(), currentUserId);
+            return tradeId;
+        }
+
+        if ("EXERCISE".equals(businessType)) {
+            // 执行期权审批通过：执行扣款、设置行权标志与行权日、状态置为已行权
+            optionTradeService.processExerciseApproval(tradeId, currentUserId, comment, task.getPayload());
+
+            // 记录审批日志
+            FxTradeMaster master = fxTradeMasterMapper.selectByTradeId(tradeId);
+            approvalLogService.recordLog(tradeId, Constants.NODE_CHECK, currentUserId,
+                    currentUser != null ? currentUser.getRealName() : null,
+                    SecurityUtils.getCurrentOrgCode(), Constants.DECISION_APPROVE, comment,
+                    TradeStatus.ACTIVE.name(), TradeStatus.EXERCISED.name());
+
+            // 完成复核任务
+            taskService.completeTask(task.getTaskId(), currentUserId);
+            return tradeId;
+        }
+
+        // 期权费交割：已在提交时执行完毕，审批通过只需记录日志并完成任务
+        FxTradeMaster master = getTradeOrThrow(tradeId);
+        String beforeStatus = master.getStatus();
+        approvalLogService.recordLog(tradeId, Constants.NODE_CHECK, currentUserId,
+                currentUser != null ? currentUser.getRealName() : null,
+                SecurityUtils.getCurrentOrgCode(), Constants.DECISION_APPROVE, comment, beforeStatus, beforeStatus);
+
+        // 生命周期事件备注
+        String opName = "PREMIUM_SETTLE".equals(businessType) ? "期权费交割" : "期权生命周期";
+        tradeLifecycleService.recordEvent(tradeId, businessType, currentUserId,
+                beforeStatus, beforeStatus, master.getNotionalAmount(), master.getCustomerRate(),
+                null, opName + "复核通过：" + (comment != null ? comment : ""));
+
+        taskService.completeTask(task.getTaskId(), currentUserId);
+        return tradeId;
+    }
+
+    /**
+     * 复核拒绝：
+     * - 提前交割/原价展期/市价展期/期权生命周期任务：不改变原交易状态（保持 ACTIVE），流程直接结束
+     * - 其他任务：交易状态置为已拒绝，记录审批日志与生命周期事件，完成任务
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -330,6 +425,26 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         }
 
         FxTask task = validateTask(taskId, tradeId);
+        // 非系统管理员不能跨机构复核
+        validateTaskOrg(task);
+
+        // 提前交割/原价展期/市价展期/期权生命周期任务：拒绝后流程直接结束，原交易状态保持不变
+        if (isLifecycleSpecialTask(task.getTaskType())) {
+            FxTradeMaster master = getTradeOrThrow(tradeId);
+            String beforeStatus = master.getStatus();
+            approvalLogService.recordLog(tradeId, Constants.NODE_CHECK, currentUserId,
+                    currentUser != null ? currentUser.getRealName() : null,
+                    SecurityUtils.getCurrentOrgCode(), Constants.DECISION_REJECT, comment, beforeStatus, beforeStatus);
+            // CHECK_LIFECYCLE 任务使用 businessType 作为事件类型，其他任务使用 taskType
+            String eventType = TaskType.CHECK_LIFECYCLE.name().equals(task.getTaskType())
+                    ? task.getBusinessType() : task.getTaskType();
+            tradeLifecycleService.recordEvent(tradeId, eventType, currentUserId,
+                    beforeStatus, beforeStatus, master.getNotionalAmount(), master.getCustomerRate(),
+                    null, getLifecycleTaskName(task.getTaskType(), task.getBusinessType()) + "复核拒绝：" + (comment != null ? comment : ""));
+            taskService.completeTask(taskId, currentUserId);
+            return;
+        }
+
         FxTradeMaster master = getTradeOrThrow(tradeId);
 
         // 经办人≠复核人校验（仅当用户不同时拥有 MAKER 和 CHECKER 角色时）
@@ -360,7 +475,48 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
     }
 
     /**
-     * 退回经办：交易状态回退为草稿，记录审批日志与生命周期事件，完成任务，创建修改任务给原经办人员
+     * 判断是否为特殊生命周期任务（提前交割/原价展期/市价展期/期权生命周期复核）
+     * 这类任务的原交易状态为 ACTIVE（或已执行/已放弃等），拒绝/退回时不应改变原交易状态
+     */
+    private boolean isLifecycleSpecialTask(String taskType) {
+        return TaskType.EARLY_DELIVERY.name().equals(taskType)
+                || TaskType.ROLLOVER_ORIGINAL.name().equals(taskType)
+                || TaskType.ROLLOVER_MARKET.name().equals(taskType)
+                || TaskType.CHECK_LIFECYCLE.name().equals(taskType);
+    }
+
+    /**
+     * 获取生命周期特殊任务的中文名称，用于生命周期事件备注
+     * @param taskType 任务类型
+     * @param businessType 业务类型（CHECK_LIFECYCLE 任务用于区分 ABANDON/EXERCISE/PREMIUM_SETTLE）
+     */
+    private String getLifecycleTaskName(String taskType, String businessType) {
+        if (TaskType.EARLY_DELIVERY.name().equals(taskType)) {
+            return "提前交割";
+        } else if (TaskType.ROLLOVER_ORIGINAL.name().equals(taskType)) {
+            return "原价展期";
+        } else if (TaskType.ROLLOVER_MARKET.name().equals(taskType)) {
+            return "市价展期";
+        } else if (TaskType.CHECK_LIFECYCLE.name().equals(taskType)) {
+            if ("ABANDON".equals(businessType)) {
+                return "放弃期权";
+            } else if ("EXERCISE".equals(businessType)) {
+                return "执行期权";
+            } else if ("PREMIUM_SETTLE".equals(businessType)) {
+                return "期权费交割";
+            }
+            return "期权生命周期";
+        }
+        return "";
+    }
+
+    /**
+     * 退回经办：
+     * - 提前交割/原价展期/市价展期任务：不改变原交易状态（保持 ACTIVE），创建 MODIFY 任务给原经办人，
+     *   MODIFY 任务的 businessType 设为原任务类型（如 EARLY_DELIVERY），payload 携带原 payload，
+     *   前端根据 businessType 跳转回对应的发起页面并回填 payload
+     * - 期权生命周期任务（CHECK_LIFECYCLE）：原交易状态保持不变，不创建 MODIFY 任务（无对应编辑页面）
+     * - 其他任务：交易状态回退为草稿，创建修改任务给原经办人员
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -373,6 +529,45 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         }
 
         FxTask task = validateTask(taskId, tradeId);
+        // 非系统管理员不能跨机构复核
+        validateTaskOrg(task);
+
+        // 提前交割/原价展期/市价展期任务：原交易状态保持 ACTIVE，创建 MODIFY 任务给原经办人
+        // 期权生命周期任务（CHECK_LIFECYCLE）：原交易状态保持不变，不创建 MODIFY 任务（无对应编辑页面）
+        if (isLifecycleSpecialTask(task.getTaskType())) {
+            FxTradeMaster master = getTradeOrThrow(tradeId);
+            String beforeStatus = master.getStatus();
+            approvalLogService.recordLog(tradeId, Constants.NODE_CHECK, currentUserId,
+                    currentUser != null ? currentUser.getRealName() : null,
+                    SecurityUtils.getCurrentOrgCode(), Constants.DECISION_RETURN, comment, beforeStatus, beforeStatus);
+            // CHECK_LIFECYCLE 任务使用 businessType 作为事件类型，其他任务使用 taskType
+            String eventType = TaskType.CHECK_LIFECYCLE.name().equals(task.getTaskType())
+                    ? task.getBusinessType() : task.getTaskType();
+            tradeLifecycleService.recordEvent(tradeId, eventType, currentUserId,
+                    beforeStatus, beforeStatus, master.getNotionalAmount(), master.getCustomerRate(),
+                    null, getLifecycleTaskName(task.getTaskType(), task.getBusinessType()) + "退回经办：" + (comment != null ? comment : ""));
+            taskService.completeTask(taskId, currentUserId);
+
+            // 期权生命周期任务（CHECK_LIFECYCLE）不创建 MODIFY 任务（无对应编辑页面，用户可重新发起）
+            if (TaskType.CHECK_LIFECYCLE.name().equals(task.getTaskType())) {
+                return;
+            }
+
+            // 提前交割/原价展期/市价展期任务：创建 MODIFY 任务给原经办人，businessType 设为原任务类型，payload 携带原 payload
+            if (master.getMakerId() != null) {
+                Integer orgLevel = null;
+                if (master.getBranchCode() != null) {
+                    FxOrg org = fxOrgMapper.selectByOrgCode(master.getBranchCode());
+                    if (org != null) {
+                        orgLevel = org.getOrgLevel();
+                    }
+                }
+                taskService.createTaskForUser(TaskType.MODIFY.name(), tradeId, master.getBusinessNo(),
+                        task.getTaskType(), master.getMakerId(), master.getBranchCode(), orgLevel, task.getPayload());
+            }
+            return;
+        }
+
         FxTradeMaster master = getTradeOrThrow(tradeId);
 
         // 经办人≠复核人校验（仅当用户不同时拥有 MAKER 和 CHECKER 角色时）
@@ -444,7 +639,9 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         payload.setOriginalAmount(original.getNotionalAmount());
         payload.setOriginalCustomerRate(original.getCustomerRate());
         payload.setOriginalMaturityDate(original.getMaturityDate());
-        
+        payload.setBranchCode(original.getBranchCode());
+        payload.setBranchName(original.getBranchName());
+
         payload.setNearLegCustomerRate(request.getNearLegCustomerRate());
         payload.setNearLegCostRate(request.getNearLegCostRate());
         payload.setFarLegCustomerRate(request.getFarLegCustomerRate());
@@ -483,6 +680,11 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
                 orgLevel,
                 payloadJson
         );
+
+        // 记录生命周期事件：发起提前交割，待复核
+        tradeLifecycleService.recordEvent(original.getTradeId(), "EARLY_DELIVERY", currentUserId,
+                original.getStatus(), original.getStatus(), original.getNotionalAmount(), original.getCustomerRate(),
+                null, "提前交割：发起，待复核");
 
         return original.getTradeId();
     }
@@ -631,11 +833,9 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
 
     /**
      * 原价展期：
-     * 展期交易体现为一笔掉期交易：近端与原交易方向相反（平掉旧交易），远端与原交易方向相同（新远期交易）
-     * 原价展期近端/远端成本汇率、客户汇率均取原交易汇率，不产生轧差
-     * 1. 原交易状态 ACTIVE -> ROLLED_OVER，原交易交割方式改为无需交割（被掉期近端平掉）
-     * 2. 生成一笔掉期交易（近端无需交割，远端全额交割），状态为待复核
-     * 3. 为新掉期交易创建生命周期复核任务
+     * 1. 创建原价展期任务（不立即变更原交易状态、不生成新交易）
+     * 2. 任务载荷中存储原价展期相关信息
+     * 3. 任务复核通过后才执行实际的原价展期逻辑
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -645,43 +845,131 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         validateActiveStatus(original);
         validateForwardOrSwap(original);
 
-        String beforeStatus = original.getStatus();
-        String afterStatus = TradeStatus.ROLLED_OVER.name();
+        // 组装任务载荷
+        RolloverOriginalTaskPayload payload = new RolloverOriginalTaskPayload();
+        payload.setOriginalTradeId(original.getTradeId());
+        payload.setOriginalBusinessNo(original.getBusinessNo());
+        payload.setOriginalTradeType(original.getTradeType());
+        payload.setCustomerId(original.getCustomerId());
+        payload.setCustomerName(original.getCustomerName());
+        payload.setCurrencyPair(original.getCurrencyPair());
+        payload.setOriginalTradeDirection(original.getTradeDirection());
+        payload.setOriginalAmount(original.getNotionalAmount());
+        payload.setOriginalCustomerRate(original.getCustomerRate());
+        payload.setOriginalCostRate(original.getCostRate());
+        payload.setOriginalMaturityDate(original.getMaturityDate());
+        payload.setBranchCode(original.getBranchCode());
+        payload.setBranchName(original.getBranchName());
+        payload.setNewMaturityDate(request.getNewMaturityDate());
+        payload.setNearLegCostRate(request.getNearLegCostRate());
+        payload.setNearLegCustomerRate(request.getNearLegCustomerRate());
+        payload.setFarLegCostRate(request.getFarLegCostRate());
+        payload.setFarLegCustomerRate(request.getFarLegCustomerRate());
+        payload.setFarLegAmount(request.getFarLegAmount());
+        payload.setFarLegBranchProfitPoint(request.getFarLegBranchProfitPoint());
+        payload.setFarLegCurrency1Account(request.getFarLegCurrency1Account());
+        payload.setFarLegCurrency2Account(request.getFarLegCurrency2Account());
+        payload.setRemark(request.getRemark());
 
-        original.setStatus(afterStatus);
-        fxTradeMasterMapper.update(original);
+        String payloadJson;
+        try {
+            payloadJson = objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "序列化任务载荷失败");
+        }
 
-        // 原交易被掉期近端平掉，交割方式改为无需交割
-        fxTradeMasterMapper.updateSettlementMethod(original.getTradeId(), SettlementMethod.NONE.name());
-        if (TradeType.FORWARD.name().equals(original.getTradeType())) {
-            var forwardTrade = fxForwardTradeMapper.selectByTradeId(original.getTradeId());
-            if (forwardTrade != null) {
-                forwardTrade.setSettlementMethod(SettlementMethod.NONE.name());
-                fxForwardTradeMapper.update(forwardTrade);
+        Integer orgLevel = null;
+        if (original.getBranchCode() != null) {
+            FxOrg org = fxOrgMapper.selectByOrgCode(original.getBranchCode());
+            if (org != null) {
+                orgLevel = org.getOrgLevel();
             }
         }
 
-        tradeLifecycleService.recordEvent(tradeId, "ROLLOVER_ORIGINAL", currentUserId,
-                beforeStatus, afterStatus, original.getNotionalAmount(), original.getCustomerRate(),
-                null, "原价展期：" + request.getRemark());
+        taskService.createTask(
+                TaskType.ROLLOVER_ORIGINAL.name(),
+                original.getTradeId(),
+                original.getBusinessNo(),
+                "原价展期",
+                RoleCode.CHECKER.name(),
+                original.getBranchCode(),
+                orgLevel,
+                payloadJson
+        );
 
-        // 生成掉期交易：原价展期，近端无需交割，远端全额交割
-        String newTradeId = generateSwapForRollover(original, request, currentUserId,
-                SpecialTradeType.ROLLOVER_ORIGINAL);
+        // 记录生命周期事件：发起原价展期，待复核
+        tradeLifecycleService.recordEvent(original.getTradeId(), "ROLLOVER_ORIGINAL", currentUserId,
+                original.getStatus(), original.getStatus(), original.getNotionalAmount(), original.getCustomerRate(),
+                null, "原价展期：发起，待复核");
 
-        createLifecycleCheckTask(newTradeId, original.getBusinessNo(), TradeType.SWAP.name(),
-                original.getBranchCode(), currentUserId);
+        return original.getTradeId();
+    }
 
-        return newTradeId;
+    /**
+     * 处理原价展期任务的复核通过
+     * 展期交易体现为一笔掉期交易：近端与原交易方向相反（平掉旧交易），远端与原交易方向相同（新远期交易）
+     * 原价展期近端/远端成本汇率、客户汇率均取原交易汇率，不产生轧差
+     */
+    private String processRolloverOriginalApproval(FxTask task, Long currentUserId, FxUser currentUser, String comment) {
+        try {
+            RolloverOriginalTaskPayload payload = objectMapper.readValue(task.getPayload(), RolloverOriginalTaskPayload.class);
+            FxTradeMaster original = getTradeOrThrow(payload.getOriginalTradeId());
+
+            String beforeStatus = original.getStatus();
+            String afterStatus = TradeStatus.ROLLED_OVER.name();
+
+            original.setStatus(afterStatus);
+            fxTradeMasterMapper.update(original);
+
+            // 原交易被掉期近端平掉，交割方式改为无需交割
+            fxTradeMasterMapper.updateSettlementMethod(original.getTradeId(), SettlementMethod.NONE.name());
+            if (TradeType.FORWARD.name().equals(original.getTradeType())) {
+                var forwardTrade = fxForwardTradeMapper.selectByTradeId(original.getTradeId());
+                if (forwardTrade != null) {
+                    forwardTrade.setSettlementMethod(SettlementMethod.NONE.name());
+                    fxForwardTradeMapper.update(forwardTrade);
+                }
+            }
+
+            tradeLifecycleService.recordEvent(original.getTradeId(), "ROLLOVER_ORIGINAL", currentUserId,
+                    beforeStatus, afterStatus, original.getNotionalAmount(), original.getCustomerRate(),
+                    null, "原价展期：" + payload.getRemark());
+
+            // 把 payload 转换为 RolloverRequest 复用生成逻辑
+            RolloverRequest request = new RolloverRequest();
+            request.setNewMaturityDate(payload.getNewMaturityDate());
+            request.setNearLegCostRate(payload.getNearLegCostRate());
+            request.setNearLegCustomerRate(payload.getNearLegCustomerRate());
+            request.setFarLegCostRate(payload.getFarLegCostRate());
+            request.setFarLegCustomerRate(payload.getFarLegCustomerRate());
+            request.setFarLegAmount(payload.getFarLegAmount());
+            request.setFarLegBranchProfitPoint(payload.getFarLegBranchProfitPoint());
+            request.setFarLegCurrency1Account(payload.getFarLegCurrency1Account());
+            request.setFarLegCurrency2Account(payload.getFarLegCurrency2Account());
+            request.setRemark(payload.getRemark());
+
+            // 生成掉期交易：原价展期，近端无需交割，远端全额交割（展期审核通过即生效，无需再复核）
+            String newTradeId = generateSwapForRollover(original, request, currentUserId,
+                    SpecialTradeType.ROLLOVER_ORIGINAL);
+
+            // 记录生成掉期交易的生命周期事件
+            tradeLifecycleService.recordEvent(newTradeId, "ROLLOVER_ORIGINAL", currentUserId,
+                    null, TradeStatus.ACTIVE.name(), original.getNotionalAmount(), original.getCustomerRate(),
+                    original.getTradeId(), "原价展期自动生成掉期交易（已生效）");
+
+            taskService.completeTask(task.getTaskId(), currentUserId);
+
+            return newTradeId;
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "处理原价展期任务失败：" + e.getMessage());
+        }
     }
 
     /**
      * 市价展期：
-     * 展期交易体现为一笔掉期交易：近端与原交易方向相反（平掉旧交易），远端与原交易方向相同（新远期交易）
-     * 市价展期近端/远端成本汇率、客户汇率均取市场实时汇率，产生轧差
-     * 1. 原交易状态 ACTIVE -> CLOSED，原交易交割方式改为无需交割（被掉期近端平掉）
-     * 2. 生成一笔掉期交易（近端差额交割，远端全额交割，含轧差信息），状态为待复核
-     * 3. 为新掉期交易创建生命周期复核任务
+     * 1. 创建市价展期任务（不立即变更原交易状态、不生成新交易）
+     * 2. 任务载荷中存储市价展期相关信息（含轧差信息）
+     * 3. 任务复核通过后才执行实际的市价展期逻辑
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -691,33 +979,131 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         validateActiveStatus(original);
         validateForwardOrSwap(original);
 
-        String beforeStatus = original.getStatus();
-        String afterStatus = TradeStatus.CLOSED.name();
+        // 组装任务载荷
+        RolloverMarketTaskPayload payload = new RolloverMarketTaskPayload();
+        payload.setOriginalTradeId(original.getTradeId());
+        payload.setOriginalBusinessNo(original.getBusinessNo());
+        payload.setOriginalTradeType(original.getTradeType());
+        payload.setCustomerId(original.getCustomerId());
+        payload.setCustomerName(original.getCustomerName());
+        payload.setCurrencyPair(original.getCurrencyPair());
+        payload.setOriginalTradeDirection(original.getTradeDirection());
+        payload.setOriginalAmount(original.getNotionalAmount());
+        payload.setOriginalCustomerRate(original.getCustomerRate());
+        payload.setOriginalCostRate(original.getCostRate());
+        payload.setOriginalMaturityDate(original.getMaturityDate());
+        payload.setBranchCode(original.getBranchCode());
+        payload.setBranchName(original.getBranchName());
+        payload.setNewMaturityDate(request.getNewMaturityDate());
+        payload.setNearLegCostRate(request.getNearLegCostRate());
+        payload.setNearLegCustomerRate(request.getNearLegCustomerRate());
+        payload.setFarLegCostRate(request.getFarLegCostRate());
+        payload.setFarLegCustomerRate(request.getFarLegCustomerRate());
+        payload.setFarLegAmount(request.getFarLegAmount());
+        payload.setFarLegBranchProfitPoint(request.getFarLegBranchProfitPoint());
+        payload.setFarLegCurrency1Account(request.getFarLegCurrency1Account());
+        payload.setFarLegCurrency2Account(request.getFarLegCurrency2Account());
+        payload.setNettingCurrency(request.getNettingCurrency());
+        payload.setNettingAccount(request.getNettingAccount());
+        payload.setNettingAmount(request.getNettingAmount());
+        payload.setCustomerPnl(request.getCustomerPnl());
+        payload.setRemark(request.getRemark());
 
-        original.setStatus(afterStatus);
-        fxTradeMasterMapper.update(original);
+        String payloadJson;
+        try {
+            payloadJson = objectMapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "序列化任务载荷失败");
+        }
 
-        // 原交易被掉期近端平掉，交割方式改为无需交割
-        fxTradeMasterMapper.updateSettlementMethod(original.getTradeId(), SettlementMethod.NONE.name());
-        if (TradeType.FORWARD.name().equals(original.getTradeType())) {
-            var forwardTrade = fxForwardTradeMapper.selectByTradeId(original.getTradeId());
-            if (forwardTrade != null) {
-                forwardTrade.setSettlementMethod(SettlementMethod.NONE.name());
-                fxForwardTradeMapper.update(forwardTrade);
+        Integer orgLevel = null;
+        if (original.getBranchCode() != null) {
+            FxOrg org = fxOrgMapper.selectByOrgCode(original.getBranchCode());
+            if (org != null) {
+                orgLevel = org.getOrgLevel();
             }
         }
 
-        tradeLifecycleService.recordEvent(tradeId, "ROLLOVER_MARKET", currentUserId,
-                beforeStatus, afterStatus, original.getNotionalAmount(), original.getCustomerRate(),
-                null, "市价展期：客户损益=" + request.getCustomerPnl() + "，" + request.getRemark());
+        taskService.createTask(
+                TaskType.ROLLOVER_MARKET.name(),
+                original.getTradeId(),
+                original.getBusinessNo(),
+                "市价展期",
+                RoleCode.CHECKER.name(),
+                original.getBranchCode(),
+                orgLevel,
+                payloadJson
+        );
 
-        // 生成掉期交易：市价展期，近端差额交割，远端全额交割
-        String newTradeId = generateSwapForRolloverMarket(original, request, currentUserId);
+        // 记录生命周期事件：发起市价展期，待复核
+        tradeLifecycleService.recordEvent(original.getTradeId(), "ROLLOVER_MARKET", currentUserId,
+                original.getStatus(), original.getStatus(), original.getNotionalAmount(), original.getCustomerRate(),
+                null, "市价展期：发起，待复核");
 
-        createLifecycleCheckTask(newTradeId, original.getBusinessNo(), TradeType.SWAP.name(),
-                original.getBranchCode(), currentUserId);
+        return original.getTradeId();
+    }
 
-        return newTradeId;
+    /**
+     * 处理市价展期任务的复核通过
+     * 展期交易体现为一笔掉期交易：近端与原交易方向相反（平掉旧交易），远端与原交易方向相同（新远期交易）
+     * 市价展期近端/远端成本汇率、客户汇率均取市场实时汇率，产生轧差
+     */
+    private String processRolloverMarketApproval(FxTask task, Long currentUserId, FxUser currentUser, String comment) {
+        try {
+            RolloverMarketTaskPayload payload = objectMapper.readValue(task.getPayload(), RolloverMarketTaskPayload.class);
+            FxTradeMaster original = getTradeOrThrow(payload.getOriginalTradeId());
+
+            String beforeStatus = original.getStatus();
+            String afterStatus = TradeStatus.CLOSED.name();
+
+            original.setStatus(afterStatus);
+            fxTradeMasterMapper.update(original);
+
+            // 原交易被掉期近端平掉，交割方式改为无需交割
+            fxTradeMasterMapper.updateSettlementMethod(original.getTradeId(), SettlementMethod.NONE.name());
+            if (TradeType.FORWARD.name().equals(original.getTradeType())) {
+                var forwardTrade = fxForwardTradeMapper.selectByTradeId(original.getTradeId());
+                if (forwardTrade != null) {
+                    forwardTrade.setSettlementMethod(SettlementMethod.NONE.name());
+                    fxForwardTradeMapper.update(forwardTrade);
+                }
+            }
+
+            tradeLifecycleService.recordEvent(original.getTradeId(), "ROLLOVER_MARKET", currentUserId,
+                    beforeStatus, afterStatus, original.getNotionalAmount(), original.getCustomerRate(),
+                    null, "市价展期：客户损益=" + payload.getCustomerPnl() + "，" + payload.getRemark());
+
+            // 把 payload 转换为 RolloverMarketRequest 复用生成逻辑
+            RolloverMarketRequest request = new RolloverMarketRequest();
+            request.setNewMaturityDate(payload.getNewMaturityDate());
+            request.setNearLegCostRate(payload.getNearLegCostRate());
+            request.setNearLegCustomerRate(payload.getNearLegCustomerRate());
+            request.setFarLegCostRate(payload.getFarLegCostRate());
+            request.setFarLegCustomerRate(payload.getFarLegCustomerRate());
+            request.setFarLegAmount(payload.getFarLegAmount());
+            request.setFarLegBranchProfitPoint(payload.getFarLegBranchProfitPoint());
+            request.setFarLegCurrency1Account(payload.getFarLegCurrency1Account());
+            request.setFarLegCurrency2Account(payload.getFarLegCurrency2Account());
+            request.setNettingCurrency(payload.getNettingCurrency());
+            request.setNettingAccount(payload.getNettingAccount());
+            request.setNettingAmount(payload.getNettingAmount());
+            request.setCustomerPnl(payload.getCustomerPnl());
+            request.setRemark(payload.getRemark());
+
+            // 生成掉期交易：市价展期，近端差额交割，远端全额交割（展期审核通过即生效，无需再复核）
+            String newTradeId = generateSwapForRolloverMarket(original, request, currentUserId);
+
+            // 记录生成掉期交易的生命周期事件
+            tradeLifecycleService.recordEvent(newTradeId, "ROLLOVER_MARKET", currentUserId,
+                    null, TradeStatus.ACTIVE.name(), original.getNotionalAmount(), original.getCustomerRate(),
+                    original.getTradeId(), "市价展期自动生成掉期交易（已生效）");
+
+            taskService.completeTask(task.getTaskId(), currentUserId);
+
+            return newTradeId;
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.BUSINESS_ERROR, "处理市价展期任务失败：" + e.getMessage());
+        }
     }
 
     /**
@@ -861,6 +1247,20 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
     }
 
     /**
+     * 校验复核机构权限：非系统管理员不能跨机构复核
+     * 系统管理员(admin)可跨机构复核，其他复核人员仅能复核本机构任务
+     */
+    private void validateTaskOrg(FxTask task) {
+        if (SecurityUtils.isAdmin()) {
+            return;
+        }
+        String currentOrgCode = SecurityUtils.getCurrentOrgCode();
+        if (task.getAssigneeOrg() != null && !task.getAssigneeOrg().equals(currentOrgCode)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "不能跨机构复核其他机构的任务");
+        }
+    }
+
+    /**
      * 判断是否需要授权：交易金额超过机构审批额度时需要授权
      */
     private boolean needAuthorization(FxTradeMaster master) {
@@ -945,61 +1345,82 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         String nearLegDirection = original.getTradeDirection();
         // 远端交易方向：与原交易方向相反
         String farLegDirection = reverseDirection(original.getTradeDirection());
-        
+
         // 近端客户汇率：取用户输入的近端汇率
         BigDecimal nearLegCustomerRate = payload.getNearLegCustomerRate() != null ? payload.getNearLegCustomerRate() : original.getCustomerRate();
         // 近端成本汇率
         BigDecimal nearLegCostRate = payload.getNearLegCostRate() != null ? payload.getNearLegCostRate() : original.getCostRate();
-        
+
         // 远端客户汇率：取原交易客户汇率
         BigDecimal farLegCustomerRate = payload.getFarLegCustomerRate() != null ? payload.getFarLegCustomerRate() : original.getCustomerRate();
         // 远端成本汇率
         BigDecimal farLegCostRate = payload.getFarLegCostRate() != null ? payload.getFarLegCostRate() : original.getCostRate();
-        
+
         // 计算近端和远端收益点
         BigDecimal nearLegProfitPoint = calculateBranchProfitPoint(nearLegDirection, nearLegCustomerRate, nearLegCostRate);
         BigDecimal farLegProfitPoint = calculateBranchProfitPoint(farLegDirection, farLegCustomerRate, farLegCostRate);
 
+        // 提前交割：近端全额交割（客户实际收付），远端无需交割（仅记账对冲）
+        String nearLegSettlement = SettlementMethod.FULL.name();
+        String farLegSettlement = SettlementMethod.NONE.name();
+
+        LocalDate nearLegValueDate = payload.getNearLegValueDate() != null ? payload.getNearLegValueDate() : LocalDate.now();
+        LocalDate farLegValueDate = payload.getFarLegValueDate() != null ? payload.getFarLegValueDate() : original.getMaturityDate();
+
         FxTradeMaster master = copyBaseInfo(original, newTradeId, businessNo);
         master.setTradeType(TradeType.SWAP.name());
-        master.setStatus(TradeStatus.PENDING_CHECK.name());
+        master.setStatus(TradeStatus.ACTIVE.name()); // 提前交割审核通过即生效，无需再复核
         master.setSpecialTradeType(SpecialTradeType.EARLY_DELIVERY.name());
         master.setOriginalTradeType(original.getTradeType());
         master.setOriginalTradeId(original.getTradeId());
         master.setNotionalAmount(payload.getOriginalAmount());
         master.setTradeDirection(original.getTradeDirection()); // 掉期主表方向用原交易方向
         master.setTradeDate(LocalDate.now());
+        master.setValueDate(nearLegValueDate); // 近端起息日
+        master.setMaturityDate(farLegValueDate); // 远端到期日
         master.setCustomerRate(nearLegCustomerRate); // 主表汇率用近端汇率
         master.setCostRate(nearLegCostRate);
         master.setBranchProfitPoint(nearLegProfitPoint);
+        master.setSettlementMethod(nearLegSettlement);
         master.setMakerId(currentUserId);
+        master.setCheckerId(currentUserId); // 提前交割审核通过自动生效，复核人为提前交割审批人
         master.setMakeTime(LocalDateTime.now());
+        master.setCheckTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         fxTradeMasterMapper.insert(master);
 
         // 构建掉期子表
         FxSwapTrade swapTrade = new FxSwapTrade();
         swapTrade.setTradeId(newTradeId);
-        swapTrade.setSwapType(original.getTradeDirection());
-        
+        swapTrade.setSwapType("BUY".equals(original.getTradeDirection()) ? "S_B" : "B_S");
+
         // 近端信息：与原交易方向相同，使用新客户汇率
         swapTrade.setNearLegDirection(nearLegDirection);
         swapTrade.setNearLegAmount(payload.getOriginalAmount());
         swapTrade.setNearLegRate(nearLegCustomerRate);
         swapTrade.setNearLegCostRate(nearLegCostRate);
+        swapTrade.setNearLegCustomerRate(nearLegCustomerRate);
         swapTrade.setNearLegBranchProfitPoint(nearLegProfitPoint);
-        swapTrade.setNearLegValueDate(payload.getNearLegValueDate() != null ? payload.getNearLegValueDate() : LocalDate.now());
-        swapTrade.setNearLegAccount(payload.getNearLegAccount1()); // 账户1作为主账户
-        
+        swapTrade.setNearLegValueDate(nearLegValueDate);
+        swapTrade.setNearLegCurrency1Account(payload.getNearLegAccount1());
+        swapTrade.setNearLegCurrency2Account(payload.getNearLegAccount2());
+        swapTrade.setNearLegSettlementMethod(nearLegSettlement);
+
         // 远端信息：与原交易方向相反，使用原交易客户汇率
         swapTrade.setFarLegDirection(farLegDirection);
         swapTrade.setFarLegAmount(payload.getOriginalAmount());
         swapTrade.setFarLegRate(farLegCustomerRate);
         swapTrade.setFarLegCostRate(farLegCostRate);
+        swapTrade.setFarLegCustomerRate(farLegCustomerRate);
         swapTrade.setFarLegBranchProfitPoint(farLegProfitPoint);
-        swapTrade.setFarLegValueDate(payload.getFarLegValueDate() != null ? payload.getFarLegValueDate() : original.getMaturityDate());
-        swapTrade.setFarLegAccount(payload.getNearLegAccount2());
-        
+        swapTrade.setFarLegValueDate(farLegValueDate);
+        swapTrade.setFarLegCurrency1Account(payload.getNearLegAccount1());
+        swapTrade.setFarLegCurrency2Account(payload.getNearLegAccount2());
+        swapTrade.setFarLegSettlementMethod(farLegSettlement);
+
+        // 交易期限：按近端起息日到远端到期日的天数匹配标准期限 ON/TN/SN/SW/1M，不匹配则为非标准
+        swapTrade.setTerm(calcSwapTerm(nearLegValueDate, farLegValueDate));
+
         swapTrade.setIsPureSwap(Constants.NO);
         fxSwapTradeMapper.insert(swapTrade);
 
@@ -1075,7 +1496,7 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         // 构建掉期子表
         FxSwapTrade swapTrade = new FxSwapTrade();
         swapTrade.setTradeId(newTradeId);
-        swapTrade.setSwapType(original.getTradeDirection());
+        swapTrade.setSwapType("BUY".equals(original.getTradeDirection()) ? "S_B" : "B_S");
         // 近端：与原交易方向相同，使用含惩罚的汇率（优先使用penaltyRate）
         swapTrade.setNearLegDirection(original.getTradeDirection());
         swapTrade.setNearLegAmount(request.getDefaultAmount());
@@ -1115,6 +1536,26 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
             profit = costRate.subtract(customerRate);
         }
         return profit.multiply(new BigDecimal("1000"));
+    }
+
+    /**
+     * 计算掉期远端期限：按近端起息日到远端到期日的天数匹配标准期限
+     * ON=1天, TN=2天, SN=3天, SW=7天, 1M=1个月(28~31天)，不匹配则为"非标准"
+     */
+    private String calcSwapTerm(LocalDate nearValueDate, LocalDate farValueDate) {
+        if (nearValueDate == null || farValueDate == null) {
+            return "非标准";
+        }
+        long days = ChronoUnit.DAYS.between(nearValueDate, farValueDate);
+        long months = ChronoUnit.MONTHS.between(nearValueDate, farValueDate);
+        if (months == 1 && days >= 28 && days <= 31) {
+            return "1M";
+        }
+        if (days == 1) return "ON";
+        if (days == 2) return "TN";
+        if (days == 3) return "SN";
+        if (days == 7) return "SW";
+        return "非标准";
     }
 
     /**
@@ -1220,6 +1661,8 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         master.setNettingAccount(payload.getNettingAccount());
         master.setNettingAmount(payload.getNettingAmount());
         master.setSettlementMethod(SettlementMethod.NONE.name());
+        master.setValueDate(payload.getSwapNearLegValueDate() != null ? payload.getSwapNearLegValueDate() : LocalDate.now());
+        master.setMaturityDate(original.getMaturityDate()); // 远端到期日 = 原交易到期日
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
         master.setCheckerId(currentUserId);
@@ -1230,12 +1673,13 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         // 构建掉期子表
         FxSwapTrade swapTrade = new FxSwapTrade();
         swapTrade.setTradeId(newTradeId);
-        swapTrade.setSwapType(original.getTradeDirection());
+        swapTrade.setSwapType("BUY".equals(original.getTradeDirection()) ? "S_B" : "B_S");
 
         // 近端信息
         swapTrade.setNearLegDirection(nearLegDirection);
         swapTrade.setNearLegAmount(payload.getDefaultAmount());
         swapTrade.setNearLegRate(nearLegCustomerRate);
+        swapTrade.setNearLegCustomerRate(nearLegCustomerRate);
         swapTrade.setNearLegCostRate(nearLegCostRate);
         swapTrade.setNearLegBranchProfitPoint(nearLegProfitPoint);
         swapTrade.setNearLegValueDate(payload.getSwapNearLegValueDate() != null ? payload.getSwapNearLegValueDate() : LocalDate.now());
@@ -1246,11 +1690,17 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         swapTrade.setFarLegDirection(farLegDirection);
         swapTrade.setFarLegAmount(payload.getDefaultAmount());
         swapTrade.setFarLegRate(farLegCustomerRate);
+        swapTrade.setFarLegCustomerRate(farLegCustomerRate);
         swapTrade.setFarLegCostRate(farLegCostRate);
         swapTrade.setFarLegBranchProfitPoint(farLegProfitPoint);
         swapTrade.setFarLegValueDate(original.getMaturityDate());
         swapTrade.setFarLegAccount(payload.getFarLegAccount());
         swapTrade.setFarLegSettlementMethod(SettlementMethod.NONE.name());
+
+        // 远端交易期限：按近端起息日到远端到期日的天数匹配标准期限 ON/TN/SN/SW/1M，不匹配则为非标准
+        LocalDate nearValueDate = swapTrade.getNearLegValueDate();
+        LocalDate farValueDate = swapTrade.getFarLegValueDate();
+        swapTrade.setTerm(calcSwapTerm(nearValueDate, farValueDate));
 
         swapTrade.setIsPureSwap(Constants.NO);
         fxSwapTradeMapper.insert(swapTrade);
@@ -1288,7 +1738,7 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
 
         FxTradeMaster master = copyBaseInfo(original, newTradeId, businessNo);
         master.setTradeType(TradeType.SWAP.name());
-        master.setStatus(TradeStatus.PENDING_CHECK.name());
+        master.setStatus(TradeStatus.ACTIVE.name()); // 展期审核通过即生效，无需再复核
         master.setSpecialTradeType(specialType.name());
         master.setOriginalTradeType(original.getTradeType());
         master.setOriginalTradeId(original.getTradeId());
@@ -1302,15 +1752,17 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         master.setBranchProfitPoint(farLegProfitPoint);
         master.setSettlementMethod(nearLegSettlement);
         master.setMakerId(currentUserId);
+        master.setCheckerId(currentUserId); // 展期审核通过自动生效，复核人为展期审批人
         master.setMakeTime(LocalDateTime.now());
+        master.setCheckTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         fxTradeMasterMapper.insert(master);
 
         // 构建掉期子表
         FxSwapTrade swapTrade = new FxSwapTrade();
         swapTrade.setTradeId(newTradeId);
-        // 掉期类型：原BUY→近卖远买=S_B，原SELL→近买远卖=B_S
-        swapTrade.setSwapType("BUY".equals(original.getTradeDirection()) ? "S_B" : "B_S");
+        // 掉期类型（银行角度）：近端=reverse(original)，原SELL→近端客户买入=银行卖出=S_B，原BUY→近端客户卖出=银行买入=B_S
+        swapTrade.setSwapType("SELL".equals(original.getTradeDirection()) ? "S_B" : "B_S");
 
         // 近端：与原交易方向相反，使用原交易汇率，无需交割
         swapTrade.setNearLegDirection(nearLegDirection);
@@ -1333,6 +1785,9 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         swapTrade.setFarLegCurrency1Account(request.getFarLegCurrency1Account());
         swapTrade.setFarLegCurrency2Account(request.getFarLegCurrency2Account());
         swapTrade.setFarLegSettlementMethod(farLegSettlement);
+
+        // 远端交易期限：按近端起息日到远端到期日的天数匹配标准期限 ON/TN/SN/SW/1M，不匹配则为非标准
+        swapTrade.setTerm(calcSwapTerm(swapTrade.getNearLegValueDate(), swapTrade.getFarLegValueDate()));
 
         swapTrade.setIsPureSwap(Constants.NO);
         fxSwapTradeMapper.insert(swapTrade);
@@ -1369,7 +1824,7 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
 
         FxTradeMaster master = copyBaseInfo(original, newTradeId, businessNo);
         master.setTradeType(TradeType.SWAP.name());
-        master.setStatus(TradeStatus.PENDING_CHECK.name());
+        master.setStatus(TradeStatus.ACTIVE.name()); // 展期审核通过即生效，无需再复核
         master.setSpecialTradeType(SpecialTradeType.ROLLOVER_MARKET.name());
         master.setOriginalTradeType(original.getTradeType());
         master.setOriginalTradeId(original.getTradeId());
@@ -1387,15 +1842,17 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         master.setNettingAccount(request.getNettingAccount());
         master.setNettingAmount(request.getNettingAmount());
         master.setMakerId(currentUserId);
+        master.setCheckerId(currentUserId); // 展期审核通过自动生效，复核人为展期审批人
         master.setMakeTime(LocalDateTime.now());
+        master.setCheckTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         fxTradeMasterMapper.insert(master);
 
         // 构建掉期子表
         FxSwapTrade swapTrade = new FxSwapTrade();
         swapTrade.setTradeId(newTradeId);
-        // 掉期类型：原BUY→近卖远买=S_B，原SELL→近买远卖=B_S
-        swapTrade.setSwapType("BUY".equals(original.getTradeDirection()) ? "S_B" : "B_S");
+        // 掉期类型（银行角度）：近端=reverse(original)，原SELL→近端客户买入=银行卖出=S_B，原BUY→近端客户卖出=银行买入=B_S
+        swapTrade.setSwapType("SELL".equals(original.getTradeDirection()) ? "S_B" : "B_S");
 
         // 近端：与原交易方向相反，使用市场汇率，差额交割
         swapTrade.setNearLegDirection(nearLegDirection);
@@ -1418,6 +1875,9 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         swapTrade.setFarLegCurrency1Account(request.getFarLegCurrency1Account());
         swapTrade.setFarLegCurrency2Account(request.getFarLegCurrency2Account());
         swapTrade.setFarLegSettlementMethod(farLegSettlement);
+
+        // 远端交易期限：按近端起息日到远端到期日的天数匹配标准期限 ON/TN/SN/SW/1M，不匹配则为非标准
+        swapTrade.setTerm(calcSwapTerm(swapTrade.getNearLegValueDate(), swapTrade.getFarLegValueDate()));
 
         swapTrade.setIsPureSwap(Constants.NO);
         fxSwapTradeMapper.insert(swapTrade);

@@ -57,9 +57,14 @@ public interface FxTradeMasterMapper {
     int insert(FxTradeMaster trade);
 
     /**
-     * 更新交易
+     * 更新交易（仅更新状态、复核人、复核时间，带乐观锁）
      */
     int update(FxTradeMaster trade);
+
+    /**
+     * 更新交易全部字段（用于退回重新编辑提交场景），带乐观锁
+     */
+    int updateAllFields(FxTradeMaster trade);
 
     /**
      * 更新交易交割方式

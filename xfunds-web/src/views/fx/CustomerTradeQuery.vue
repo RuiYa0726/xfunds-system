@@ -11,7 +11,8 @@ import {
   formatSwapType,
   getStatusTagType,
   tradeStatusMap,
-  specialTradeTypeMap
+  specialTradeTypeMap,
+  formatEventType
 } from '@/utils/constants'
 
 // 查询条件表单
@@ -32,13 +33,12 @@ const pagination = reactive({
   pageSize: 10
 })
 
-// 交易类型下拉选项（含"全部"）
+// 交易类型下拉选项（外汇工作台仅含即期/远期/掉期，期权在期权交易管理模块查询）
 const tradeTypeOptions = [
   { value: '', label: '全部' },
   { value: 'SPOT', label: '即期' },
   { value: 'FORWARD', label: '远期' },
-  { value: 'SWAP', label: '掉期' },
-  { value: 'OPTION', label: '期权' }
+  { value: 'SWAP', label: '掉期' }
 ]
 
 // 交易状态下拉选项
@@ -66,6 +66,11 @@ function formatDirectionOrSwap(row) {
     return row.tradeDirection === 'BUY' ? 'S/B 近卖远买' : 'B/S 近买远卖'
   }
   return formatTradeDirection(row.tradeDirection)
+}
+
+// 原交易类型格式化：优先取 originalTradeType，为空时回退到当前 tradeType
+function formatOriginalTradeType(row) {
+  return formatTradeType(row.originalTradeType || row.tradeType)
 }
 
 // 交易时间格式化（24小时制）
@@ -240,8 +245,11 @@ onMounted(() => {
         style="width: 100%"
       >
         <el-table-column prop="businessNo" label="业务编号" width="160" fixed />
-        <el-table-column label="原交易类型" width="100">
+        <el-table-column label="交易类型" width="90">
           <template #default="{ row }">{{ formatTradeType(row.tradeType) }}</template>
+        </el-table-column>
+        <el-table-column label="原交易类型" width="100">
+          <template #default="{ row }">{{ formatOriginalTradeType(row) }}</template>
         </el-table-column>
         <el-table-column label="特殊交易类型" width="120">
           <template #default="{ row }">{{ formatSpecialTradeType(row.specialTradeType) }}</template>
@@ -424,12 +432,12 @@ onMounted(() => {
                   <el-descriptions-item label="远端分行收益点">{{ tradeDetail.swapDetail?.farLegBranchProfitPoint ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="成本汇率">{{ tradeDetail.swapDetail?.farLegCostRate ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="客户汇率">{{ tradeDetail.swapDetail?.farLegCustomerRate ?? '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="币种1账户">{{ tradeDetail.swapDetail?.farLegCurrency1Account || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="币种2账户">{{ tradeDetail.swapDetail?.farLegCurrency2Account || '-' }}</el-descriptions-item>
+                  <el-descriptions-item v-if="tradeDetail.master.specialTradeType !== 'EARLY_DELIVERY'" label="币种1账户">{{ tradeDetail.swapDetail?.farLegCurrency1Account || '-' }}</el-descriptions-item>
+                  <el-descriptions-item v-if="tradeDetail.master.specialTradeType !== 'EARLY_DELIVERY'" label="币种2账户">{{ tradeDetail.swapDetail?.farLegCurrency2Account || '-' }}</el-descriptions-item>
                 </el-descriptions>
 
-                <!-- 提前违约生成的掉期交易展示轧差信息 -->
-                <template v-if="tradeDetail.master.specialTradeType === 'EARLY_DEFAULT'">
+                <!-- 提前违约/市价展期生成的掉期交易展示轧差信息 -->
+                <template v-if="['EARLY_DEFAULT', 'ROLLOVER_MARKET'].includes(tradeDetail.master.specialTradeType)">
                   <el-divider content-position="left">轧差信息</el-divider>
                   <el-descriptions :column="3" border size="small" class="detail-desc">
                     <el-descriptions-item label="轧差货币">{{ tradeDetail.master.nettingCurrency || '-' }}</el-descriptions-item>
@@ -437,6 +445,48 @@ onMounted(() => {
                     <el-descriptions-item label="轧差金额">{{ tradeDetail.master.nettingAmount ?? '-' }}</el-descriptions-item>
                   </el-descriptions>
                 </template>
+              </template>
+
+              <!-- ===== OPTION 期权交易详情 ===== -->
+              <template v-else-if="tradeDetail.master.tradeType === 'OPTION'">
+                <el-divider content-position="left">公共信息</el-divider>
+                <el-descriptions :column="3" border size="small" class="detail-desc">
+                  <el-descriptions-item label="客户号">{{ tradeDetail.master.customerId || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="客户名称">{{ tradeDetail.master.customerName || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="交易币种">{{ tradeDetail.master.currencyPair || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="买卖方向">{{ formatTradeDirection(tradeDetail.optionDetail?.buyerSeller) }}</el-descriptions-item>
+                  <el-descriptions-item label="期权类别">{{ tradeDetail.optionDetail?.optionStyle === 'AMERICAN' ? '美式' : '欧式' }}</el-descriptions-item>
+                  <el-descriptions-item label="涨跌方向">{{ tradeDetail.optionDetail?.optionType === 'CALL' ? '涨' : '跌' }}</el-descriptions-item>
+                  <el-descriptions-item label="交易日">{{ tradeDetail.master.tradeDate || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="到期日">{{ tradeDetail.optionDetail?.maturityDate || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="交割类型">{{ tradeDetail.master.deliveryType || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="交割日">{{ tradeDetail.master.valueDate || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="天数">{{ tradeDetail.optionDetail?.days ?? '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="行权时点">{{ tradeDetail.optionDetail?.exerciseTimePoint || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="交割方式">{{ formatSettlementMethod(tradeDetail.optionDetail?.settlementMethod) }}</el-descriptions-item>
+                  <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="结售汇用途编码">{{ tradeDetail.master.fxPurposeCode || '-' }}</el-descriptions-item>
+                </el-descriptions>
+
+                <el-divider content-position="left">交易要素</el-divider>
+                <el-descriptions :column="3" border size="small" class="detail-desc">
+                  <el-descriptions-item label="即期汇率">{{ tradeDetail.master.spotRate ?? '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="执行价格">{{ tradeDetail.optionDetail?.strikePrice ?? '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="面值（币种1）">{{ tradeDetail.optionDetail?.notionalAmount ?? '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="币种1账户">{{ tradeDetail.optionDetail?.currency1Account || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="币种2账户">{{ tradeDetail.optionDetail?.currency2Account || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="观察期开始日">{{ tradeDetail.optionDetail?.observationStartDate || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="观察期结束日">{{ tradeDetail.optionDetail?.observationEndDate || '-' }}</el-descriptions-item>
+                </el-descriptions>
+
+                <el-divider content-position="left">费用/报价</el-divider>
+                <el-descriptions :column="3" border size="small" class="detail-desc">
+                  <el-descriptions-item label="期权费金额">{{ tradeDetail.optionDetail?.premiumAmount ?? '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="期权费币种">{{ tradeDetail.optionDetail?.premiumCurrency || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="期权费账户">{{ tradeDetail.optionDetail?.premiumAccountId || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="期权费交割日">{{ tradeDetail.optionDetail?.premiumValueDate || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="期权费已付">{{ tradeDetail.optionDetail?.premiumPaidFlag === '1' ? '是' : '否' }}</el-descriptions-item>
+                </el-descriptions>
               </template>
             </template>
             <el-empty v-else description="暂无数据" />
@@ -451,9 +501,13 @@ onMounted(() => {
               size="small"
               max-height="360"
             >
-              <el-table-column prop="eventType" label="事件类型" width="140" />
+              <el-table-column label="事件类型" width="140">
+                <template #default="{ row }">{{ formatEventType(row.eventType) }}</template>
+              </el-table-column>
               <el-table-column prop="eventTime" label="事件时间" width="160" />
-              <el-table-column prop="operatorId" label="操作人" width="120" />
+              <el-table-column label="操作人" width="120">
+                <template #default="{ row }">{{ row.operatorName || row.operatorId || '-' }}</template>
+              </el-table-column>
               <el-table-column prop="remark" label="备注" min-width="160" />
             </el-table>
           </el-tab-pane>

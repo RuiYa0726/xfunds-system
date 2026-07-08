@@ -70,6 +70,16 @@ public interface TaskService {
     FxTask getByTaskId(Long taskId);
 
     /**
+     * 判断指定交易是否已存在待处理（PENDING/CLAIMED）的生命周期任务
+     * 用于防止同一交易的同一生命周期操作（放弃/执行/期权费交割）在审批期间被重复提交
+     *
+     * @param tradeId      交易ID
+     * @param businessType 业务类型（ABANDON/EXERCISE/PREMIUM_SETTLE）
+     * @return 存在待处理任务返回true，否则false
+     */
+    boolean hasPendingLifecycleTask(String tradeId, String businessType);
+
+    /**
      * 查询当前用户的待办任务视图列表（含交易主表关联信息）
      *
      * @param userId 用户ID

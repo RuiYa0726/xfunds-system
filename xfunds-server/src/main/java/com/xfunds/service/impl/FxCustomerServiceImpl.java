@@ -191,4 +191,32 @@ public class FxCustomerServiceImpl implements FxCustomerService {
                 ? request.getRemark() : "人工调整保证金余额");
         fxMarginTxnMapper.insert(txn);
     }
+
+    /**
+     * 新增保证金账户：校验客户存在、同币种不重复，生成账户ID并插入
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void addMarginAccount(String customerId, String currency, BigDecimal initialBalance) {
+        // 校验客户存在
+        FxCustomer customer = fxCustomerMapper.selectByCustomerId(customerId);
+        if (customer == null) {
+            throw new IllegalArgumentException("客户不存在：" + customerId);
+        }
+        // 校验同币种保证金账户不重复
+        FxMarginAccount existing = fxMarginAccountMapper.selectByCustomerIdAndCurrency(customerId, currency);
+        if (existing != null) {
+            throw new IllegalStateException("该客户已存在币种 " + currency + " 的保证金账户");
+        }
+        // 构建保证金账户
+        FxMarginAccount account = new FxMarginAccount();
+        account.setMarginAccountId("MA" + System.currentTimeMillis() + (int)(Math.random() * 1000));
+        account.setCustomerId(customerId);
+        account.setCurrency(currency);
+        account.setBalance(initialBalance != null ? initialBalance : BigDecimal.ZERO);
+        account.setFrozenAmount(BigDecimal.ZERO);
+        account.setOccupiedAmount(BigDecimal.ZERO);
+        account.setStatus(Constants.STATUS_ACTIVE);
+        fxMarginAccountMapper.insert(account);
+    }
 }

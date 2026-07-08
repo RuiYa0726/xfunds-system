@@ -85,3 +85,12 @@ export function adjustMarginAccount(data) {
     data
   })
 }
+
+// 新增保证金账户（手工为客户创建保证金账户）
+export function addMarginAccount(customerId, data) {
+  return request({
+    url: `/customer/${customerId}/margin-account`,
+    method: 'post',
+    data
+  })
+}

@@ -9,6 +9,14 @@ export function getMyTasks(params) {
   })
 }
 
+// 根据任务ID查询任务详情（含 payload）
+export function getTaskDetail(taskId) {
+  return request({
+    url: `/task/${taskId}`,
+    method: 'get'
+  })
+}
+
 // 查询角色池待办任务
 export function getRoleTasks(params) {
   return request({

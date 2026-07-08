@@ -5,6 +5,7 @@ import com.xfunds.common.SecurityUtils;
 import com.xfunds.dto.CustomerAccountRequest;
 import com.xfunds.dto.CustomerSaveRequest;
 import com.xfunds.dto.MarginAccountAdjustRequest;
+import com.xfunds.dto.MarginAccountCreateRequest;
 import com.xfunds.dto.PageResponse;
 import com.xfunds.entity.FxCustomer;
 import com.xfunds.entity.FxCustomerAccount;
@@ -126,6 +127,16 @@ public class FxCustomerController {
     public Result<Void> adjustMarginAccount(@Valid @RequestBody MarginAccountAdjustRequest request) {
         Long operatorId = SecurityUtils.getCurrentUserId();
         fxCustomerService.adjustMarginAccountBalance(request, operatorId);
+        return Result.ok();
+    }
+
+    /**
+     * 新增保证金账户（手工为客户创建保证金账户）
+     */
+    @PostMapping("/{customerId}/margin-account")
+    public Result<Void> addMarginAccount(@PathVariable String customerId,
+                                          @Valid @RequestBody MarginAccountCreateRequest request) {
+        fxCustomerService.addMarginAccount(customerId, request.getCurrency(), request.getInitialBalance());
         return Result.ok();
     }
 }

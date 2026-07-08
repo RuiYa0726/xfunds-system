@@ -27,6 +27,10 @@ public class EarlyDeliveryTaskPayload {
     private BigDecimal originalCustomerRate;
     /** 原到期日 */
     private LocalDate originalMaturityDate;
+    /** 交易机构编码 */
+    private String branchCode;
+    /** 交易机构名称 */
+    private String branchName;
 
     /** 近端客户汇率 */
     private BigDecimal nearLegCustomerRate;

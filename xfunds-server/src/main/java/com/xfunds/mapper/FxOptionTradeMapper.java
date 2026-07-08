@@ -44,4 +44,10 @@ public interface FxOptionTradeMapper {
      * 查询美式期权且处于实值状态的期权交易（用于工作台提醒）
      */
     List<FxOptionTrade> selectAmericanInMoney();
+
+    /**
+     * 查询所有处于实值状态的期权交易（不限美式/欧式，用于期权价内提醒）
+     * CALL: 参考汇率 > 执行价；PUT: 参考汇率 < 执行价
+     */
+    List<FxOptionTrade> selectAllInMoney();
 }

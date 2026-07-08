@@ -73,7 +73,17 @@ onMounted(() => {
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <div class="user-info-panel">
+                <div class="user-info-row">
+                  <span class="user-info-label">所属机构</span>
+                  <span class="user-info-value">{{ userStore.userInfo.orgName || userStore.userInfo.orgCode || '-' }}</span>
+                </div>
+                <div class="user-info-row">
+                  <span class="user-info-label">角色权限</span>
+                  <span class="user-info-value">{{ (userStore.userInfo.roleNames && userStore.userInfo.roleNames.length) ? userStore.userInfo.roleNames.join('、') : '-' }}</span>
+                </div>
+              </div>
+              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -173,6 +183,28 @@ onMounted(() => {
   gap: 4px;
   cursor: pointer;
   color: #fff;
+}
+
+/* 用户信息悬浮面板 */
+.user-info-panel {
+  padding: 8px 16px;
+  min-width: 200px;
+}
+.user-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.user-info-label {
+  font-size: 13px;
+  color: #909399;
+  white-space: nowrap;
+}
+.user-info-value {
+  font-size: 13px;
+  color: #303133;
+  font-weight: 500;
 }
 
 /* 主体三栏 */

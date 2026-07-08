@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 
-// 期权工作台：查询美式期权价内提醒列表
+// 期权工作台：查询期权价内提醒列表
 export function getOptionWorkbench() {
   return request.get('/option/workbench/reminders')
 }
@@ -13,16 +13,6 @@ export function getOptionTasks() {
 // 期权工作台：查看原交易详情
 export function viewOriginalTrade(tradeId) {
   return request.get(`/option/workbench/original/${tradeId}`)
-}
-
-// 期权工作台：执行行权
-export function executeOption(data) {
-  return request.post('/option/workbench/execute', data)
-}
-
-// 期权工作台：暂不处理（推迟提醒）
-export function postponeReminder(data) {
-  return request.post('/option/workbench/postpone', data)
 }
 
 // 发起期权交易
@@ -38,11 +28,6 @@ export function getOptionDetail(tradeId) {
 // 查询未到期期权列表
 export function listUnmaturedOptions(params) {
   return request.get('/option/unmatured', { params })
-}
-
-// 平仓期权
-export function closeOption(data) {
-  return request.post('/option/close', data)
 }
 
 // 查询欧式到期期权列表
@@ -75,11 +60,6 @@ export function queryOptions(params) {
   return request.get('/option/list', { params })
 }
 
-// 平仓交易查询
-export function queryCloseTrades(params) {
-  return request.get('/option/close-list', { params })
-}
-
 // 期权费交割查询
 export function queryPremiumTrades(params) {
   return request.get('/option/premium-list', { params })
@@ -95,12 +75,7 @@ export function queryAbandonTrades(params) {
   return request.get('/option/abandon-list', { params })
 }
 
-// 获取期权参数列表
-export function getOptionParams() {
-  return request.get('/option/param/list')
-}
-
-// 保存期权参数
-export function saveOptionParam(data) {
-  return request.post('/option/param/save', data)
+// 行权期权
+export function executeOption(data) {
+  return request.post('/option/exercise', data)
 }

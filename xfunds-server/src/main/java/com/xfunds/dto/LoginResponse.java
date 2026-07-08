@@ -25,6 +25,12 @@ public class LoginResponse {
     /** 所属机构编码 */
     private String orgCode;
 
+    /** 所属机构名称 */
+    private String orgName;
+
     /** 角色编码列表 */
     private List<String> roles;
+
+    /** 角色名称列表 */
+    private List<String> roleNames;
 }

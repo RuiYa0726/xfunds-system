@@ -1,16 +1,24 @@
 // 交易状态码 -> 中文标签映射
 export const tradeStatusMap = {
+  DRAFT: '草稿',
   PENDING_CHECK: '待复核',
   PENDING_AUTHORIZE: '待授权',
   PENDING_LIFECYCLE_CHECK: '待生命周期复核',
   ACTIVE: '生效',
   MATURED: '到期',
   SETTLED: '已交割',
+  SETTLE_FAILED: '交割失败',
   DEFAULTED: '已违约',
-  CANCELLED: '已撤销',
+  CLOSED: '已平仓',
   REJECTED: '已拒绝',
-  RETURNED: '已退回',
-  CLOSED: '已关闭'
+  ROLLED_OVER: '已展期',
+  EARLY_SETTLED: '提前交割',
+  EARLY_DEFAULTED: '提前违约',
+  EXERCISED: '已行权',
+  ABANDONED: '已放弃',
+  PREMIUM_SETTLED: '期权费已结清',
+  CANCELLED: '已撤销',
+  RETURNED: '已退回'
 }
 
 // 交易类型码 -> 中文标签映射
@@ -43,7 +51,9 @@ export const taskTypeMap = {
   QUOTE_CHECK: '报价复核',
   MODIFY: '修改交易',
   EARLY_DEFAULT: '提前违约',
-  EARLY_DELIVERY: '提前交割'
+  EARLY_DELIVERY: '提前交割',
+  ROLLOVER_ORIGINAL: '原价展期',
+  ROLLOVER_MARKET: '市价展期'
 }
 
 // 任务状态码 -> 中文标签映射
@@ -52,6 +62,36 @@ export const taskStatusMap = {
   CLAIMED: '已认领',
   COMPLETED: '已完成',
   CANCELLED: '已取消'
+}
+
+// 期权生命周期操作类型 -> 中文标签映射（用于 CHECK_LIFECYCLE 任务的 businessType）
+export const lifecycleOpMap = {
+  ABANDON: '放弃期权',
+  EXERCISE: '执行期权',
+  PREMIUM_SETTLE: '期权费交割'
+}
+
+// 生命周期事件类型码 -> 中文标签映射
+export const eventTypeMap = {
+  MAKE: '录入',
+  CHECK: '复核',
+  AUTHORIZE: '授权',
+  SUBMIT: '提交',
+  EARLY_DELIVERY: '提前交割',
+  EARLY_DEFAULT: '提前违约',
+  EARLY_DEFAULT_GEN: '提前违约生成',
+  ROLLOVER_ORIGINAL: '原价展期',
+  ROLLOVER_MARKET: '市价展期',
+  MARGIN_SUPPLEMENT: '追保',
+  FULL_DEFAULT: '全部违约',
+  SCHEDULED_SETTLE: '定时交割',
+  SCHEDULED_SETTLE_FAIL: '定时交割失败',
+  EXERCISE: '行权',
+  EXERCISE_NET: '行权差额交割',
+  POSTPONE: '推迟',
+  CLOSE: '平仓',
+  ABANDON: '放弃',
+  PREMIUM_SETTLE: '期权费交割'
 }
 
 // 买卖方向码 -> 中文标签映射
@@ -107,17 +147,25 @@ export const optionDeliveryTypeMap = {
 // 根据状态码返回对应的 el-tag 类型，用于表格中状态列着色
 export function getStatusTagType(status) {
   const typeMap = {
+    DRAFT: 'info',
     PENDING_CHECK: 'warning',
     PENDING_AUTHORIZE: 'warning',
     PENDING_LIFECYCLE_CHECK: 'warning',
     ACTIVE: 'success',
     MATURED: 'primary',
     SETTLED: 'info',
+    SETTLE_FAILED: 'danger',
     DEFAULTED: 'danger',
-    CANCELLED: 'info',
+    CLOSED: 'info',
     REJECTED: 'danger',
-    RETURNED: 'warning',
-    CLOSED: 'info'
+    ROLLED_OVER: 'primary',
+    EARLY_SETTLED: 'success',
+    EARLY_DEFAULTED: 'danger',
+    EXERCISED: 'success',
+    ABANDONED: 'info',
+    PREMIUM_SETTLED: 'info',
+    CANCELLED: 'info',
+    RETURNED: 'warning'
   }
   return typeMap[status] || 'info'
 }
@@ -145,6 +193,16 @@ export function formatTaskType(type) {
 // 将任务状态码转换为中文标签
 export function formatTaskStatus(status) {
   return taskStatusMap[status] || status || '-'
+}
+
+// 将生命周期事件类型码转换为中文标签
+export function formatEventType(type) {
+  return eventTypeMap[type] || type || '-'
+}
+
+// 将期权生命周期操作类型码转换为中文标签
+export function formatLifecycleOp(type) {
+  return lifecycleOpMap[type] || ''
 }
 
 // 将买卖方向码转换为中文标签

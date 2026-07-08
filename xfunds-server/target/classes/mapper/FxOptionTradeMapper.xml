@@ -16,13 +16,12 @@
         <result column="exercise_date" property="exerciseDate"/>
         <result column="exercise_flag" property="exerciseFlag"/>
         <result column="abandon_flag" property="abandonFlag"/>
+        <result column="abandon_date" property="abandonDate"/>
         <result column="settlement_method" property="settlementMethod"/>
         <result column="buyer_seller" property="buyerSeller"/>
         <result column="currency1_account" property="currency1Account"/>
         <result column="currency2_account" property="currency2Account"/>
         <result column="notional_amount" property="notionalAmount"/>
-        <result column="currency1_amount" property="currency1Amount"/>
-        <result column="currency2_amount" property="currency2Amount"/>
         <result column="observation_start_date" property="observationStartDate"/>
         <result column="observation_end_date" property="observationEndDate"/>
         <result column="exercise_time_point" property="exerciseTimePoint"/>
@@ -39,8 +38,8 @@
     <sql id="Base_Column_List">
         trade_id, option_type, option_style, strike_price, premium_amount, premium_currency,
         premium_value_date, premium_paid_flag, premium_account_id, maturity_date, exercise_date,
-        exercise_flag, abandon_flag, settlement_method, buyer_seller, currency1_account,
-        currency2_account, notional_amount, currency1_amount, currency2_amount,
+        exercise_flag, abandon_flag, abandon_date, settlement_method, buyer_seller, currency1_account,
+        currency2_account, notional_amount,
         observation_start_date, observation_end_date, exercise_time_point, days,
         auto_exercise_flag, close_date, close_premium, close_pnl, closed_amount,
         remaining_amount, reference_rate
@@ -55,16 +54,16 @@
     <insert id="insert" parameterType="com.xfunds.entity.FxOptionTrade">
         INSERT INTO fx_option_trade (trade_id, option_type, option_style, strike_price,
             premium_amount, premium_currency, premium_value_date, premium_paid_flag,
-            premium_account_id, maturity_date, exercise_date, exercise_flag, abandon_flag,
+            premium_account_id, maturity_date, exercise_date, exercise_flag, abandon_flag, abandon_date,
             settlement_method, buyer_seller, currency1_account, currency2_account,
-            notional_amount, currency1_amount, currency2_amount, observation_start_date,
+            notional_amount, observation_start_date,
             observation_end_date, exercise_time_point, days, auto_exercise_flag, close_date,
             close_premium, close_pnl, closed_amount, remaining_amount, reference_rate)
         VALUES (#{tradeId}, #{optionType}, #{optionStyle}, #{strikePrice},
             #{premiumAmount}, #{premiumCurrency}, #{premiumValueDate}, #{premiumPaidFlag},
-            #{premiumAccountId}, #{maturityDate}, #{exerciseDate}, #{exerciseFlag}, #{abandonFlag},
+            #{premiumAccountId}, #{maturityDate}, #{exerciseDate}, #{exerciseFlag}, #{abandonFlag}, #{abandonDate},
             #{settlementMethod}, #{buyerSeller}, #{currency1Account}, #{currency2Account},
-            #{notionalAmount}, #{currency1Amount}, #{currency2Amount}, #{observationStartDate},
+            #{notionalAmount}, #{observationStartDate},
             #{observationEndDate}, #{exerciseTimePoint}, #{days}, #{autoExerciseFlag}, #{closeDate},
             #{closePremium}, #{closePnl}, #{closedAmount}, #{remainingAmount}, #{referenceRate})
     </insert>
@@ -132,13 +131,12 @@
             <if test="exerciseDate != null">exercise_date = #{exerciseDate},</if>
             <if test="exerciseFlag != null">exercise_flag = #{exerciseFlag},</if>
             <if test="abandonFlag != null">abandon_flag = #{abandonFlag},</if>
+            <if test="abandonDate != null">abandon_date = #{abandonDate},</if>
             <if test="settlementMethod != null">settlement_method = #{settlementMethod},</if>
             <if test="buyerSeller != null">buyer_seller = #{buyerSeller},</if>
             <if test="currency1Account != null">currency1_account = #{currency1Account},</if>
             <if test="currency2Account != null">currency2_account = #{currency2Account},</if>
             <if test="notionalAmount != null">notional_amount = #{notionalAmount},</if>
-            <if test="currency1Amount != null">currency1_amount = #{currency1Amount},</if>
-            <if test="currency2Amount != null">currency2_amount = #{currency2Amount},</if>
             <if test="observationStartDate != null">observation_start_date = #{observationStartDate},</if>
             <if test="observationEndDate != null">observation_end_date = #{observationEndDate},</if>
             <if test="exerciseTimePoint != null">exercise_time_point = #{exerciseTimePoint},</if>
@@ -160,6 +158,21 @@
         FROM fx_option_trade
         WHERE option_style = 'AMERICAN'
           AND exercise_flag = '0'
+          AND abandon_flag = '0'
+          AND (
+              (option_type = 'CALL' AND reference_rate IS NOT NULL AND strike_price IS NOT NULL
+                   AND reference_rate > strike_price)
+              OR
+              (option_type = 'PUT' AND reference_rate IS NOT NULL AND strike_price IS NOT NULL
+                   AND reference_rate &lt; strike_price)
+          )
+    </select>
+
+    <!-- 查询所有处于实值状态的期权交易（不限美式/欧式）：CALL 时参考汇率 > 执行价，PUT 时参考汇率 < 执行价 -->
+    <select id="selectAllInMoney" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_option_trade
+        WHERE exercise_flag = '0'
           AND abandon_flag = '0'
           AND (
               (option_type = 'CALL' AND reference_rate IS NOT NULL AND strike_price IS NOT NULL

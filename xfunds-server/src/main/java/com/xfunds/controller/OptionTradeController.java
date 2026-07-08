@@ -5,7 +5,6 @@ import com.xfunds.common.Result;
 import com.xfunds.common.ResultCode;
 import com.xfunds.common.SecurityUtils;
 import com.xfunds.dto.OptionAbandonRequest;
-import com.xfunds.dto.OptionCloseRequest;
 import com.xfunds.dto.OptionExerciseRequest;
 import com.xfunds.dto.OptionPremiumSettleRequest;
 import com.xfunds.dto.OptionReminderVO;
@@ -14,6 +13,7 @@ import com.xfunds.dto.OptionTradeEntryRequest;
 import com.xfunds.dto.PageResponse;
 import com.xfunds.dto.TaskVO;
 import com.xfunds.entity.FxTradeMaster;
+import com.xfunds.entity.FxUser;
 import com.xfunds.enums.TradeType;
 import com.xfunds.service.OptionTradeService;
 import com.xfunds.service.TaskService;
@@ -64,10 +64,10 @@ public class OptionTradeController {
     }
 
     /**
-     * 分页查询期权交易列表
+     * 分页查询期权交易列表（返回主表 + 期权子表合并字段）
      */
     @GetMapping("/list")
-    public Result<PageResponse<FxTradeMaster>> list(
+    public Result<PageResponse<Map<String, Object>>> list(
             @RequestParam(required = false) String businessNo,
             @RequestParam(required = false) String customerId,
             @RequestParam(required = false) String optionStyle,
@@ -80,22 +80,10 @@ public class OptionTradeController {
     }
 
     /**
-     * 查询已平仓的期权交易列表
-     */
-    @GetMapping("/close-list")
-    public Result<PageResponse<FxTradeMaster>> closeList(
-            @RequestParam(required = false) String businessNo,
-            @RequestParam(required = false) String customerId,
-            @RequestParam(defaultValue = "1") int pageNum,
-            @RequestParam(defaultValue = "10") int pageSize) {
-        return Result.ok(optionTradeService.listCloseTrades(businessNo, customerId, pageNum, pageSize));
-    }
-
-    /**
      * 查询期权费已交割的期权交易列表
      */
     @GetMapping("/premium-list")
-    public Result<PageResponse<FxTradeMaster>> premiumList(
+    public Result<PageResponse<Map<String, Object>>> premiumList(
             @RequestParam(required = false) String businessNo,
             @RequestParam(required = false) String customerId,
             @RequestParam(defaultValue = "1") int pageNum,
@@ -107,7 +95,7 @@ public class OptionTradeController {
      * 查询已行权的期权交易列表
      */
     @GetMapping("/exercise-list")
-    public Result<PageResponse<FxTradeMaster>> exerciseList(
+    public Result<PageResponse<Map<String, Object>>> exerciseList(
             @RequestParam(required = false) String businessNo,
             @RequestParam(required = false) String customerId,
             @RequestParam(defaultValue = "1") int pageNum,
@@ -119,7 +107,7 @@ public class OptionTradeController {
      * 查询已放弃的期权交易列表
      */
     @GetMapping("/abandon-list")
-    public Result<PageResponse<FxTradeMaster>> abandonList(
+    public Result<PageResponse<Map<String, Object>>> abandonList(
             @RequestParam(required = false) String businessNo,
             @RequestParam(required = false) String customerId,
             @RequestParam(defaultValue = "1") int pageNum,
@@ -130,11 +118,11 @@ public class OptionTradeController {
     // ==================== 期权工作台 ====================
 
     /**
-     * 查询美式期权实值提醒列表
+     * 查询期权价内提醒列表（展示牌价达到执行价格的期权交易，仅展示不可执行）
      */
     @GetMapping("/workbench/reminders")
     public Result<List<OptionReminderVO>> reminders() {
-        return Result.ok(optionTradeService.getAmericanInMoneyReminders());
+        return Result.ok(optionTradeService.getInMoneyReminders());
     }
 
     /**
@@ -170,19 +158,36 @@ public class OptionTradeController {
 
     /**
      * 查询当前用户的期权相关待办任务（过滤业务类型为期权）
+     * 使用与 /api/task/my 相同的可见任务查询逻辑（含角色池任务）
      */
     @GetMapping("/workbench/tasks")
     public Result<List<TaskVO>> workbenchTasks() {
-        Long userId = SecurityUtils.getCurrentUserId();
-        if (userId == null) {
+        FxUser currentUser = SecurityUtils.getCurrentUser();
+        if (currentUser == null) {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户未登录");
         }
-        List<TaskVO> allTasks = taskService.getMyTaskVOs(userId);
+        Long userId = currentUser.getUserId();
+        String orgCode = currentUser.getOrgCode();
+        String roleCode = determineRoleCode();
+        List<TaskVO> allTasks = taskService.getVisibleTaskVOs(userId, orgCode, roleCode);
         // 过滤出期权相关的任务
         List<TaskVO> optionTasks = allTasks.stream()
                 .filter(t -> TradeType.OPTION.name().equals(t.getTradeType()))
                 .collect(Collectors.toList());
         return Result.ok(optionTasks);
+    }
+
+    /**
+     * 确定当前用户角色编码（优先 CHECKER，其次 AUTHORIZER，默认 MAKER）
+     */
+    private String determineRoleCode() {
+        if (SecurityUtils.hasRole("CHECKER")) {
+            return "CHECKER";
+        }
+        if (SecurityUtils.hasRole("AUTHORIZER")) {
+            return "AUTHORIZER";
+        }
+        return "MAKER";
     }
 
     // ==================== 期权存续期管理 ====================
@@ -199,15 +204,6 @@ public class OptionTradeController {
             @RequestParam(defaultValue = "10") int pageSize) {
         return Result.ok(optionTradeService.listUnmaturedOptions(businessNo, customerId,
                 optionStyle, pageNum, pageSize));
-    }
-
-    /**
-     * 平仓
-     */
-    @PostMapping("/close")
-    public Result<Void> close(@Valid @RequestBody OptionCloseRequest request) {
-        optionTradeService.closeOption(request.getTradeId(), request);
-        return Result.ok();
     }
 
     /**
