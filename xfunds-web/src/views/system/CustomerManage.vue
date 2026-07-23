@@ -46,6 +46,26 @@ const corpTypeOptions = [
   { value: 'SME', label: '中小民企' }
 ]
 
+// 信用等级下拉选项
+const creditLevelOptions = [
+  { value: 'AAA', label: 'AAA' },
+  { value: 'AA', label: 'AA' },
+  { value: 'A', label: 'A' },
+  { value: 'BBB', label: 'BBB' },
+  { value: 'BB', label: 'BB' },
+  { value: 'B', label: 'B' },
+  { value: 'CCC', label: 'CCC' },
+  { value: 'CC', label: 'CC' },
+  { value: 'C', label: 'C' }
+]
+
+// 风险等级下拉选项：A激进型 B平衡型 C保守型
+const riskLevelOptions = [
+  { value: 'A', label: 'A 激进型' },
+  { value: 'B', label: 'B 平衡型' },
+  { value: 'C', label: 'C 保守型' }
+]
+
 // 企业类型显示格式化
 function formatCorpType(type) {
   if (!type) return '-'
@@ -67,6 +87,19 @@ function formatIdType(type) {
   return opt ? opt.label : type
 }
 
+// 信用等级显示格式化
+function formatCreditLevel(level) {
+  if (!level) return '-'
+  return level
+}
+
+// 风险等级显示格式化：A激进型 B平衡型 C保守型
+function formatRiskLevel(level) {
+  if (!level) return '-'
+  const map = { A: 'A 激进型', B: 'B 平衡型', C: 'C 保守型' }
+  return map[level] || level
+}
+
 // 编辑弹窗状态
 const editVisible = ref(false)
 const submitting = ref(false)
@@ -78,7 +111,9 @@ const editForm = reactive({
   contactPhone: '',
   contactAddress: '',
   idType: '',
-  idNo: ''
+  idNo: '',
+  creditLevel: '',
+  riskLevel: ''
 })
 
 // 编辑表单校验规则
@@ -216,6 +251,8 @@ function openAddDialog() {
   editForm.contactAddress = ''
   editForm.idType = ''
   editForm.idNo = ''
+  editForm.creditLevel = ''
+  editForm.riskLevel = ''
   editVisible.value = true
 }
 
@@ -229,6 +266,8 @@ function openEditDialog(row) {
   editForm.contactAddress = row.contactAddress || ''
   editForm.idType = row.idType || ''
   editForm.idNo = row.idNo || ''
+  editForm.creditLevel = row.creditLevel || ''
+  editForm.riskLevel = row.riskLevel || ''
   editVisible.value = true
 }
 
@@ -467,6 +506,12 @@ onMounted(() => {
           <template #default="{ row }">{{ formatIdType(row.idType) }}</template>
         </el-table-column>
         <el-table-column prop="idNo" label="证件号码" width="180" />
+        <el-table-column label="信用等级" width="100">
+          <template #default="{ row }">{{ formatCreditLevel(row.creditLevel) }}</template>
+        </el-table-column>
+        <el-table-column label="风险等级" width="120">
+          <template #default="{ row }">{{ formatRiskLevel(row.riskLevel) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" link @click="openEditDialog(row)">编辑</el-button>
@@ -572,6 +617,32 @@ onMounted(() => {
         <el-form-item label="联系地址">
           <el-input v-model="editForm.contactAddress" placeholder="请输入联系地址" />
         </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="信用等级">
+              <el-select v-model="editForm.creditLevel" placeholder="请选择信用等级" style="width: 100%" clearable>
+                <el-option
+                  v-for="opt in creditLevelOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="风险等级">
+              <el-select v-model="editForm.riskLevel" placeholder="请选择风险等级" style="width: 100%" clearable>
+                <el-option
+                  v-for="opt in riskLevelOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
 
       <template #footer>

@@ -202,7 +202,6 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setMakeTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         fxTradeMasterMapper.insert(master);
 
         // 构建即期子表
@@ -286,7 +285,6 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setMakeTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         fxTradeMasterMapper.insert(master);
 
         // 构建远期子表
@@ -362,7 +360,6 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setMakeTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         fxTradeMasterMapper.insert(master);
 
         // 构建掉期子表（近端、远端两腿）
@@ -680,7 +677,6 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setCostRate(req.getCostRate());
         master.setBranchProfitPoint(req.getBranchProfitPoint());
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
         // 清空复核人信息，重置为经办态
@@ -767,7 +763,6 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setCostRate(req.getCostRate());
         master.setBranchProfitPoint(req.getBranchProfitPoint());
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
         // 清空复核人信息，重置为经办态
@@ -847,7 +842,6 @@ public class FxTradeServiceImpl implements FxTradeService {
         master.setSettlementMethod(SettlementMethod.FULL.name());
         master.setSpecialTradeType(SpecialTradeType.NORMAL.name());
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         master.setMakerId(currentUserId);
         master.setMakeTime(LocalDateTime.now());
         // 清空复核人信息，重置为经办态

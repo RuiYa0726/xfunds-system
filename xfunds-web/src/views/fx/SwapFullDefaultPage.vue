@@ -57,7 +57,6 @@ const form = reactive({
   marginAccountId: '',
   marginAmount: null,
   purposeCode: '',
-  fxPurposeCode: '',
   // 近端
   nearLegDirection: '',
   nearLegAmount: null,
@@ -230,7 +229,6 @@ async function loadOriginalTrade() {
     form.marginAccountId = swapDetail?.marginAccountId || ''
     form.marginAmount = swapDetail?.marginAmount || null
     form.purposeCode = master.purposeCode || ''
-    form.fxPurposeCode = master.fxPurposeCode || ''
 
     // 计算抵消交易方向：原 S_B → 新 B_S，原 B_S → 新 S_B
     // 原 S_B: nearLegDirection=BUY, farLegDirection=SELL → 新 B_S: nearLegDirection=SELL, farLegDirection=BUY
@@ -355,8 +353,7 @@ async function handleSubmit() {
       // 保证金与用途
       marginAccountId: form.marginAccountId || null,
       marginAmount: form.marginAmount,
-      purposeCode: form.purposeCode || null,
-      fxPurposeCode: form.fxPurposeCode || null
+      purposeCode: form.purposeCode || null
     }
     await fullDefault(payload)
     ElMessage.success('掉期全部违约操作提交成功')
@@ -467,11 +464,6 @@ onMounted(async () => {
             <el-col :span="12">
               <el-form-item label="用途编码">
                 <el-input v-model="form.purposeCode" readonly />
-              </el-form-item>
-            </el-col>
-            <el-col :span="12">
-              <el-form-item label="结售汇用途编码">
-                <el-input v-model="form.fxPurposeCode" readonly />
               </el-form-item>
             </el-col>
           </el-row>

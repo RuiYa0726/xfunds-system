@@ -135,7 +135,6 @@ async function loadTradeDetail() {
       form.marginAccountId = forwardDetail?.marginAccountId || ''
       form.marginAmount = forwardDetail?.marginAmount || null
       form.purposeCode = master.purposeCode || ''
-      form.fxPurposeCode = master.fxPurposeCode || ''
       form.spotRate = master.spotRate || null
       
       // 加载客户账户
@@ -265,8 +264,7 @@ const form = reactive({
   settlementMethod: 'FULL',
   marginAccountId: '',
   marginAmount: null,
-  purposeCode: '',
-  fxPurposeCode: ''
+  purposeCode: ''
 })
 
 // 表单校验规则
@@ -442,7 +440,6 @@ async function handleSubmit() {
         deliveryType: form.deliveryType,
         settlementMethod: form.settlementMethod,
         purposeCode: form.purposeCode || null,
-        fxPurposeCode: form.fxPurposeCode || null,
         spotRate: form.spotRate,
         costRate: form.costRate,
         branchProfitPoint: form.branchProfitPoint,
@@ -775,11 +772,6 @@ watch(() => form.notionalAmount, (val) => {
           <el-col :span="12">
             <el-form-item label="用途编码">
               <el-input v-model="form.purposeCode" placeholder="选填" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="结售汇用途编码">
-              <el-input v-model="form.fxPurposeCode" placeholder="选填" />
             </el-form-item>
           </el-col>
         </el-row>

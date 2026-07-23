@@ -33,8 +33,6 @@ INSERT INTO report_field_meta (field_code, column_expr, display_name_cn, data_ty
 ('netting_currency',      't.netting_currency',      '轧差货币',     'STRING',   'Y', 'N', 'N', NULL,    'fx_trade_master', '币种金额', 19),
 ('netting_amount',        't.netting_amount',        '轧差金额',     'DECIMAL',  'N', 'Y', 'N', 'SUM',   'fx_trade_master', '币种金额', 23),
 ('purpose_code',          't.purpose_code',          '用途编码',     'STRING',   'Y', 'N', 'N', NULL,    'fx_trade_master', '交易信息', 19),
-('fx_purpose_code',       't.fx_purpose_code',       '外汇用途编码', 'STRING',   'Y', 'N', 'N', NULL,    'fx_trade_master', '交易信息', 20),
-('rcpmis_report_flag',    't.rcpmis_report_flag',    'RCPMIS上报标志','STRING',  'Y', 'N', 'N', NULL,    'fx_trade_master', '交易信息', 21),
 ('maker_id',              't.maker_id',              '经办人ID',     'STRING',   'Y', 'N', 'N', NULL,    'fx_trade_master', '机构',     60),
 ('checker_id',            't.checker_id',            '复核人ID',     'STRING',   'Y', 'N', 'N', NULL,    'fx_trade_master', '机构',     61);
 

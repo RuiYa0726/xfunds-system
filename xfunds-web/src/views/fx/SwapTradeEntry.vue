@@ -135,7 +135,6 @@ async function loadTradeDetail() {
       form.marginAccountId = swapDetail?.marginAccountId || ''
       form.marginAmount = swapDetail?.marginAmount || null
       form.purposeCode = master.purposeCode || ''
-      form.fxPurposeCode = master.fxPurposeCode || ''
 
       // 近端
       form.nearLegDirection = swapDetail?.nearLegDirection || 'BUY'
@@ -299,7 +298,6 @@ const form = reactive({
   marginAccountId: '',
   marginAmount: null,
   purposeCode: '',
-  fxPurposeCode: '',
   // 近端
   // S/B(分行近卖远买)→客户近买远卖→nearLegDirection=BUY, farLegDirection=SELL
   // B/S(分行近买远卖)→客户近卖远买→nearLegDirection=SELL, farLegDirection=BUY
@@ -529,7 +527,6 @@ async function handleSubmit() {
         tradeDate: form.tradeDate,
         settlementMethod: form.settlementMethod,
         purposeCode: form.purposeCode || null,
-        fxPurposeCode: form.fxPurposeCode || null,
         marginAccountId: form.marginAccountId || null,
         marginAmount: form.marginAmount,
         // 近端
@@ -729,11 +726,6 @@ watch(() => form.tradeDate, () => {
           <el-col :span="12">
             <el-form-item label="用途编码">
               <el-input v-model="form.purposeCode" placeholder="选填" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="结售汇用途编码">
-              <el-input v-model="form.fxPurposeCode" placeholder="选填" />
             </el-form-item>
           </el-col>
         </el-row>

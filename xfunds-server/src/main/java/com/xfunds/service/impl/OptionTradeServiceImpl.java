@@ -40,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -152,7 +153,6 @@ public class OptionTradeServiceImpl implements OptionTradeService {
         master.setMakeTime(LocalDateTime.now());
         master.setVersion(Constants.DEFAULT_VERSION);
         master.setPurposeCode(req.getPurposeCode());
-        master.setFxPurposeCode(req.getFxPurposeCode());
         fxTradeMasterMapper.insert(master);
 
         // 构建期权子表
@@ -932,7 +932,6 @@ public class OptionTradeServiceImpl implements OptionTradeService {
         row.put("checkTime", master.getCheckTime());
         row.put("authorizeTime", master.getAuthorizeTime());
         row.put("purposeCode", master.getPurposeCode());
-        row.put("fxPurposeCode", master.getFxPurposeCode());
         row.put("rcpmisReportFlag", master.getRcpmisReportFlag());
         row.put("rcpmisReportTime", master.getRcpmisReportTime());
         row.put("version", master.getVersion());
@@ -948,21 +947,27 @@ public class OptionTradeServiceImpl implements OptionTradeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateReferenceRates() {
-        // 查询所有有效报价，构建 currencyPair -> 中间价 映射
+        // 查询所有有效SPOT即期报价，构建 currencyPair -> 卖出价/买入价 映射
+        // CALL期权(看涨): 参考汇率为总行卖出价(客户买入价), 卖出价 > 执行价时价内
+        // PUT期权(看跌): 参考汇率为总行买入价(客户卖出价), 买入价 < 执行价时价内
         List<FxQuote> quotes = fxQuoteMapper.selectAllActive();
-        Map<String, BigDecimal> quoteMidMap = new HashMap<>();
+        Map<String, BigDecimal> sellRateMap = new HashMap<>();
+        Map<String, BigDecimal> buyRateMap = new HashMap<>();
         for (FxQuote quote : quotes) {
             if (quote.getCurrencyPair() == null) {
                 continue;
             }
+            // 仅取即期(SPOT)报价，避免远期/掉期报价干扰
+            if (!"SPOT".equals(quote.getQuoteType())) {
+                continue;
+            }
             BigDecimal buy = quote.getTotalBuyRate();
             BigDecimal sell = quote.getTotalSellRate();
-            if (buy != null && sell != null && buy.compareTo(BigDecimal.ZERO) > 0
-                    && sell.compareTo(BigDecimal.ZERO) > 0) {
-                // 中间价 = (总行买入价 + 总行卖出价) / 2，保留4位小数
-                BigDecimal mid = buy.add(sell)
-                        .divide(new BigDecimal("2"), 4, java.math.RoundingMode.HALF_UP);
-                quoteMidMap.put(quote.getCurrencyPair(), mid);
+            if (buy != null && buy.compareTo(BigDecimal.ZERO) > 0) {
+                buyRateMap.put(quote.getCurrencyPair(), buy);
+            }
+            if (sell != null && sell.compareTo(BigDecimal.ZERO) > 0) {
+                sellRateMap.put(quote.getCurrencyPair(), sell);
             }
         }
 
@@ -974,7 +979,7 @@ public class OptionTradeServiceImpl implements OptionTradeService {
         optionParams.put("pageSize", Integer.MAX_VALUE);
         List<FxOptionTrade> activeOptions = fxOptionTradeMapper.selectByCondition(optionParams);
 
-        // 遍历更新参考汇率
+        // 遍历更新参考汇率：CALL用卖出价，PUT用买入价
         for (FxOptionTrade option : activeOptions) {
             FxTradeMaster master = fxTradeMasterMapper.selectByTradeId(option.getTradeId());
             if (master == null || master.getCurrencyPair() == null) {
@@ -986,10 +991,16 @@ public class OptionTradeServiceImpl implements OptionTradeService {
                     && !TradeStatus.PREMIUM_SETTLED.name().equals(status)) {
                 continue;
             }
-            BigDecimal mid = quoteMidMap.get(master.getCurrencyPair());
-            if (mid != null && (option.getReferenceRate() == null
-                    || option.getReferenceRate().compareTo(mid) != 0)) {
-                option.setReferenceRate(mid);
+            // 参考汇率取即期汇率中间价 = (总行买入价 + 总行卖出价) / 2
+            BigDecimal buyRate = buyRateMap.get(master.getCurrencyPair());
+            BigDecimal sellRate = sellRateMap.get(master.getCurrencyPair());
+            BigDecimal refRate = null;
+            if (buyRate != null && sellRate != null) {
+                refRate = buyRate.add(sellRate).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+            }
+            if (refRate != null && (option.getReferenceRate() == null
+                    || option.getReferenceRate().compareTo(refRate) != 0)) {
+                option.setReferenceRate(refRate);
                 fxOptionTradeMapper.update(option);
             }
         }

@@ -25,7 +25,6 @@ cursor.execute("SELECT customer_id, customer_name FROM fx_customer")
 customers = cursor.fetchall()
 
 purpose_codes = ['101', '102', '103', '104', '105', '201', '202', '203', '301', '302']
-fx_purpose_codes = ['01', '02', '03', '04', '05', '06', '07', '08']
 
 currency_config = [
     {'pair': 'USD/CNY', 'base': 'USD', 'quote': 'CNY', 'spot': 7.2269, 'fp_1d': 0.0012, 'fp_sw': 0.0035, 'fp_1m': 0.0156, 'fp_3m': 0.0425, 'fp_6m': 0.0895, 'fp_1y': 0.1750},
@@ -149,7 +148,6 @@ for i in range(3000):
     delivery_type = 'DELIVERY' if random.random() < 0.9 else 'NETTING'
     
     purpose_code = random.choice(purpose_codes)
-    fx_purpose_code = random.choice(fx_purpose_codes)
     
     if trade_type == 'SPOT':
         trade_direction = 'BUY' if random.random() < 0.5 else 'SELL'
@@ -163,16 +161,16 @@ for i in range(3000):
              notional_amount, counter_amount, trade_direction, value_date, trade_date,
              maturity_date, delivery_type, settlement_method, spot_rate, customer_rate,
              cost_rate, branch_profit_point, special_trade_type, maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code)
+             make_time, check_time, authorize_time, purpose_code)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (trade_id, business_no, trade_type, status, branch_code,
              customer_id, customer_name, currency['base'], currency['quote'], currency['pair'],
              notional_amount, counter_amount, trade_direction, value_date, trade_date,
              maturity_date, delivery_type, 'FULL', spot_rate, customer_rate,
              cost_rate, round((customer_rate - cost_rate) * 10000, 2), 'NORMAL', maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code))
+             make_time, check_time, authorize_time, purpose_code))
         
         cursor.execute('''
             INSERT INTO fx_spot_trade 
@@ -201,16 +199,16 @@ for i in range(3000):
              notional_amount, counter_amount, trade_direction, value_date, trade_date,
              maturity_date, delivery_type, settlement_method, spot_rate, customer_rate,
              cost_rate, branch_profit_point, special_trade_type, maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code)
+             make_time, check_time, authorize_time, purpose_code)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (trade_id, business_no, trade_type, status, branch_code,
              customer_id, customer_name, currency['base'], currency['quote'], currency['pair'],
              notional_amount, counter_amount, trade_direction, value_date, trade_date,
              maturity_date, delivery_type, 'FULL', spot_rate, forward_rate,
              cost_rate, round((forward_rate - cost_rate) * 10000, 2), 'NORMAL', maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code))
+             make_time, check_time, authorize_time, purpose_code))
         
         cursor.execute('''
             INSERT INTO fx_forward_trade 
@@ -251,16 +249,16 @@ for i in range(3000):
              notional_amount, counter_amount, trade_direction, value_date, trade_date,
              maturity_date, delivery_type, settlement_method, spot_rate, customer_rate,
              cost_rate, branch_profit_point, special_trade_type, maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code)
+             make_time, check_time, authorize_time, purpose_code)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (trade_id, business_no, trade_type, status, branch_code,
              customer_id, customer_name, currency['base'], currency['quote'], currency['pair'],
              notional_amount, counter_amount, near_direction, value_date, trade_date,
              maturity_date, delivery_type, 'FULL', spot_rate, near_customer_rate,
              near_cost_rate, round((near_customer_rate - near_cost_rate) * 10000, 2), 'NORMAL', maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code))
+             make_time, check_time, authorize_time, purpose_code))
         
         cursor.execute('''
             INSERT INTO fx_swap_trade 
@@ -304,16 +302,16 @@ for i in range(3000):
              notional_amount, counter_amount, trade_direction, value_date, trade_date,
              maturity_date, delivery_type, settlement_method, spot_rate, customer_rate,
              cost_rate, branch_profit_point, special_trade_type, maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code)
+             make_time, check_time, authorize_time, purpose_code)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (trade_id, business_no, trade_type, status, branch_code,
              customer_id, customer_name, currency['base'], currency['quote'], currency['pair'],
              notional_amount, counter_amount, buyer_seller, value_date, trade_date,
              maturity_date, delivery_type, 'CASH', spot_rate, strike_price,
              cost_rate, 0, 'NORMAL', maker_id, checker_id,
-             make_time, check_time, authorize_time, purpose_code, fx_purpose_code))
+             make_time, check_time, authorize_time, purpose_code))
         
         exercise_time = random_time(maturity_date)
         cursor.execute('''
@@ -359,7 +357,7 @@ print(f"\n主表counter_amount为空或0的记录: {cursor.fetchone()[0]} 条")
 cursor.execute("SELECT COUNT(*) FROM fx_trade_master WHERE spot_rate IS NULL OR customer_rate IS NULL")
 print(f"主表汇率字段为空的记录: {cursor.fetchone()[0]} 条")
 
-cursor.execute("SELECT COUNT(*) FROM fx_trade_master WHERE purpose_code IS NULL OR fx_purpose_code IS NULL")
+cursor.execute("SELECT COUNT(*) FROM fx_trade_master WHERE purpose_code IS NULL")
 print(f"主表用途编码字段为空的记录: {cursor.fetchone()[0]} 条")
 
 cursor.execute("SELECT COUNT(*) FROM fx_forward_trade WHERE term IS NULL")

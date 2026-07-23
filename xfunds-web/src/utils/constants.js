@@ -110,7 +110,9 @@ export const settlementMethodMap = {
 // 期权买卖方向码 -> 中文标签映射
 export const optionDirectionMap = {
   BUY: '买入',
-  SELL: '卖出'
+  SELL: '卖出',
+  BUYER: '买入',
+  SELLER: '卖出'
 }
 
 // 期权种类码 -> 中文标签映射（看涨/看跌）
@@ -214,6 +216,23 @@ export function formatTradeDirection(direction) {
 export function formatSwapType(swapType) {
   const swapTypeMap = { S_B: 'S/B 近卖远买', B_S: 'B/S 近买远卖' }
   return swapTypeMap[swapType] || swapType || '-'
+}
+
+/**
+ * 计算掉期期限：远端到期日 - 近端起息日的天数
+ * 1天→ON, 2天→TN, 3天→SN, 7天→SW, 28-31天→1M, 其他→非标准
+ */
+export function calcSwapTerm(nearLegValueDate, farLegValueDate) {
+  if (!nearLegValueDate || !farLegValueDate) return '-'
+  const near = new Date(nearLegValueDate)
+  const far = new Date(farLegValueDate)
+  const days = Math.round((far - near) / (1000 * 60 * 60 * 24))
+  if (days === 1) return 'ON'
+  if (days === 2) return 'TN'
+  if (days === 3) return 'SN'
+  if (days === 7) return 'SW'
+  if (days >= 28 && days <= 31) return '1M'
+  return '非标准'
 }
 
 // 将交割方式码转换为中文标签

@@ -1907,7 +1907,6 @@ public class TradeLifecycleOpsServiceImpl implements TradeLifecycleOpsService {
         master.setCostRate(original.getCostRate());
         master.setBranchProfitPoint(original.getBranchProfitPoint());
         master.setPurposeCode(original.getPurposeCode());
-        master.setFxPurposeCode(original.getFxPurposeCode());
         return master;
     }
 

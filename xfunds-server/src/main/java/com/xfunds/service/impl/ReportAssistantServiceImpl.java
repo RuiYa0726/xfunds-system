@@ -1376,8 +1376,6 @@ public class ReportAssistantServiceImpl implements ReportAssistantService {
                 new OptionValue("BB", "BB"),
                 new OptionValue("B", "B")
         ));
-        // RCPMIS上报标志
-        dict.put("rcpmis_report_flag", boolOptions());
         return dict;
     }
 

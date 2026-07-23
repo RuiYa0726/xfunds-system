@@ -196,7 +196,6 @@ CREATE TABLE fx_trade_master (
     check_time          DATETIME               COMMENT '复核时间',
     authorize_time      DATETIME               COMMENT '授权时间',
     purpose_code        VARCHAR(50)            COMMENT '用途编码',
-    fx_purpose_code     VARCHAR(50)            COMMENT '外汇用途编码',
     rcpmis_report_flag  VARCHAR(2)             COMMENT 'RCPMIS上报标志',
     rcpmis_report_time  DATETIME               COMMENT 'RCPMIS上报时间',
     netting_currency    VARCHAR(10)            COMMENT '轧差货币',

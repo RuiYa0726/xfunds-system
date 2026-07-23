@@ -9,6 +9,7 @@ import {
   formatSpecialTradeType,
   formatSettlementMethod,
   formatSwapType,
+  calcSwapTerm,
   getStatusTagType,
   tradeStatusMap,
   specialTradeTypeMap,
@@ -352,7 +353,6 @@ onMounted(() => {
                   <el-descriptions-item label="保证金账户">{{ tradeDetail.spotDetail?.marginAccountId || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="保证金金额">{{ tradeDetail.spotDetail?.marginAmount ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="结售汇用途编码">{{ tradeDetail.master.fxPurposeCode || '-' }}</el-descriptions-item>
                 </el-descriptions>
                 <!-- 提前违约生成的即期交易显示轧差信息 -->
                 <template v-if="tradeDetail.master.specialTradeType === 'EARLY_DEFAULT'">
@@ -388,7 +388,6 @@ onMounted(() => {
                   <el-descriptions-item label="保证金账户">{{ tradeDetail.forwardDetail?.marginAccountId || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="保证金金额">{{ tradeDetail.forwardDetail?.marginAmount ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="结售汇用途编码">{{ tradeDetail.master.fxPurposeCode || '-' }}</el-descriptions-item>
                 </el-descriptions>
               </template>
 
@@ -403,7 +402,6 @@ onMounted(() => {
                   <el-descriptions-item label="保证金账户">{{ tradeDetail.swapDetail?.marginAccountId || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="保证金金额">{{ tradeDetail.swapDetail?.marginAmount ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="结售汇用途编码">{{ tradeDetail.master.fxPurposeCode || '-' }}</el-descriptions-item>
                 </el-descriptions>
 
                 <!-- 近端交易信息 -->
@@ -427,7 +425,7 @@ onMounted(() => {
                   <el-descriptions-item label="远端方向">{{ formatTradeDirection(tradeDetail.swapDetail?.farLegDirection) }}</el-descriptions-item>
                   <el-descriptions-item label="远端金额">{{ tradeDetail.swapDetail?.farLegAmount ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="远端到期日">{{ tradeDetail.swapDetail?.farLegValueDate || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="期限">{{ tradeDetail.swapDetail?.term || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="期限">{{ calcSwapTerm(tradeDetail.swapDetail?.nearLegValueDate, tradeDetail.swapDetail?.farLegValueDate) }}</el-descriptions-item>
                   <el-descriptions-item label="远端交割方式">{{ formatSettlementMethod(tradeDetail.swapDetail?.farLegSettlementMethod) }}</el-descriptions-item>
                   <el-descriptions-item label="远端分行收益点">{{ tradeDetail.swapDetail?.farLegBranchProfitPoint ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="成本汇率">{{ tradeDetail.swapDetail?.farLegCostRate ?? '-' }}</el-descriptions-item>
@@ -459,13 +457,12 @@ onMounted(() => {
                   <el-descriptions-item label="涨跌方向">{{ tradeDetail.optionDetail?.optionType === 'CALL' ? '涨' : '跌' }}</el-descriptions-item>
                   <el-descriptions-item label="交易日">{{ tradeDetail.master.tradeDate || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="到期日">{{ tradeDetail.optionDetail?.maturityDate || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="交割类型">{{ tradeDetail.master.deliveryType || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="交割类型">{{ formatDeliveryType(tradeDetail.master.deliveryType) }}</el-descriptions-item>
                   <el-descriptions-item label="交割日">{{ tradeDetail.master.valueDate || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="天数">{{ tradeDetail.optionDetail?.days ?? '-' }}</el-descriptions-item>
                   <el-descriptions-item label="行权时点">{{ tradeDetail.optionDetail?.exerciseTimePoint || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="交割方式">{{ formatSettlementMethod(tradeDetail.optionDetail?.settlementMethod) }}</el-descriptions-item>
                   <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="结售汇用途编码">{{ tradeDetail.master.fxPurposeCode || '-' }}</el-descriptions-item>
                 </el-descriptions>
 
                 <el-divider content-position="left">交易要素</el-divider>

@@ -68,7 +68,6 @@ const form = reactive({
   observationStartDate: '',
   observationEndDate: '',
   purposeCode: '',
-  fxPurposeCode: '',
   branchName: ''
 })
 
@@ -150,7 +149,6 @@ async function loadDetail() {
     form.deliveryDate = master.valueDate || ''
     form.branchName = master.branchName || master.branchCode || ''
     form.purposeCode = master.purposeCode || ''
-    form.fxPurposeCode = master.fxPurposeCode || ''
     // 回填期权子表字段
     form.currency1Account = option.currency1Account || ''
     form.currency2Account = option.currency2Account || ''
@@ -533,11 +531,6 @@ onMounted(() => {
           <el-col :span="12">
             <el-form-item label="用途编码">
               <el-input v-model="form.purposeCode" disabled />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="结售汇用途编码">
-              <el-input v-model="form.fxPurposeCode" disabled />
             </el-form-item>
           </el-col>
         </el-row>

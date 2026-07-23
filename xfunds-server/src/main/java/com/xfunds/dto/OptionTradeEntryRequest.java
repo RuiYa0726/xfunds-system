@@ -114,7 +114,4 @@ public class OptionTradeEntryRequest {
 
     /** 用途编码 */
     private String purposeCode;
-
-    /** 外汇用途编码 */
-    private String fxPurposeCode;
 }

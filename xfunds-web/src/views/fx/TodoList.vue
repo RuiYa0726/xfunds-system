@@ -14,6 +14,8 @@ import {
   formatSpecialTradeType,
   formatSettlementMethod,
   formatSwapType,
+  formatOptionDeliveryType,
+  calcSwapTerm,
   formatLifecycleOp,
   lifecycleOpMap,
   getStatusTagType
@@ -1068,27 +1070,151 @@ onMounted(async () => {
           </el-form>
         </template>
 
-        <!-- 普通交易详情展示 -->
+        <!-- 普通交易详情展示：按交易类型展示完整字段（与录入页一致，只读） -->
         <template v-else-if="tradeDetail?.master">
-          <el-descriptions :column="2" border size="small" title="交易详情">
-            <el-descriptions-item label="业务编号">{{ tradeDetail.master.businessNo }}</el-descriptions-item>
-            <el-descriptions-item label="交易类型">{{ formatTradeType(tradeDetail.master.tradeType) }}</el-descriptions-item>
-            <el-descriptions-item label="特殊交易类型">{{ formatSpecialTradeType(tradeDetail.master.specialTradeType) }}</el-descriptions-item>
-            <el-descriptions-item label="货币对">{{ tradeDetail.master.currencyPair }}</el-descriptions-item>
-            <el-descriptions-item v-if="tradeDetail.master.tradeType === 'SWAP'" label="掉期类型">{{ formatSwapType(tradeDetail.swapDetail?.swapType) }}</el-descriptions-item>
-            <el-descriptions-item v-else label="买卖方向">{{ formatTradeDirection(tradeDetail.master.tradeDirection) }}</el-descriptions-item>
-            <el-descriptions-item label="金额">{{ tradeDetail.master.notionalAmount }}</el-descriptions-item>
-            <el-descriptions-item label="客户汇率">{{ tradeDetail.master.customerRate }}</el-descriptions-item>
-            <el-descriptions-item label="交易日">{{ tradeDetail.master.tradeDate }}</el-descriptions-item>
-            <el-descriptions-item label="到期日">{{ tradeDetail.master.maturityDate }}</el-descriptions-item>
-            <el-descriptions-item label="交割方式">{{ formatSettlementMethod(tradeDetail.master.settlementMethod) }}</el-descriptions-item>
-            <el-descriptions-item label="交易状态">
-              <el-tag :type="getStatusTagType(tradeDetail.master.status)" size="small">
-                {{ formatTradeStatus(tradeDetail.master.status) }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="客户号">{{ tradeDetail.master.customerId }}</el-descriptions-item>
-            <el-descriptions-item label="客户名称">{{ tradeDetail.master.customerName }}</el-descriptions-item>
+
+          <!-- ==================== 即期交易详情 ==================== -->
+          <template v-if="tradeDetail.master.tradeType === 'SPOT'">
+            <el-divider content-position="left">基本信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="业务编号">{{ tradeDetail.master.businessNo }}</el-descriptions-item>
+              <el-descriptions-item label="交易类型">{{ formatTradeType(tradeDetail.master.tradeType) }}</el-descriptions-item>
+              <el-descriptions-item label="特殊交易类型">{{ formatSpecialTradeType(tradeDetail.master.specialTradeType) || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="交易状态">
+                <el-tag :type="getStatusTagType(tradeDetail.master.status)" size="small">{{ formatTradeStatus(tradeDetail.master.status) }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="交易机构">{{ tradeDetail.master.branchCode || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户号">{{ tradeDetail.master.customerId }}</el-descriptions-item>
+              <el-descriptions-item label="客户名称">{{ tradeDetail.master.customerName }}</el-descriptions-item>
+              <el-descriptions-item label="货币对">{{ tradeDetail.master.currencyPair }}</el-descriptions-item>
+              <el-descriptions-item label="买卖方向">{{ formatTradeDirection(tradeDetail.master.tradeDirection) }}</el-descriptions-item>
+              <el-descriptions-item label="金额">{{ tradeDetail.master.notionalAmount }}</el-descriptions-item>
+              <el-descriptions-item label="交易日">{{ tradeDetail.master.tradeDate }}</el-descriptions-item>
+              <el-descriptions-item label="起息日">{{ tradeDetail.master.valueDate }}</el-descriptions-item>
+              <el-descriptions-item label="交割类型">{{ formatOptionDeliveryType(tradeDetail.master.deliveryType) }}</el-descriptions-item>
+              <el-descriptions-item label="交割方式">{{ formatSettlementMethod(tradeDetail.master.settlementMethod) }}</el-descriptions-item>
+              <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">汇率信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="即期汇率">{{ tradeDetail.master.spotRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户汇率">{{ tradeDetail.master.customerRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="成本汇率">{{ tradeDetail.master.costRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="分行收益点">{{ tradeDetail.master.branchProfitPoint || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">账户信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="币种1账户">{{ tradeDetail.spotDetail?.currency1Account || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="币种2账户">{{ tradeDetail.spotDetail?.currency2Account || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="保证金账户">{{ tradeDetail.spotDetail?.marginAccountId || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="保证金金额">{{ tradeDetail.spotDetail?.marginAmount || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </template>
+
+          <!-- ==================== 远期交易详情 ==================== -->
+          <template v-else-if="tradeDetail.master.tradeType === 'FORWARD'">
+            <el-divider content-position="left">基本信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="业务编号">{{ tradeDetail.master.businessNo }}</el-descriptions-item>
+              <el-descriptions-item label="交易类型">{{ formatTradeType(tradeDetail.master.tradeType) }}</el-descriptions-item>
+              <el-descriptions-item label="特殊交易类型">{{ formatSpecialTradeType(tradeDetail.master.specialTradeType) || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="交易状态">
+                <el-tag :type="getStatusTagType(tradeDetail.master.status)" size="small">{{ formatTradeStatus(tradeDetail.master.status) }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="交易机构">{{ tradeDetail.master.branchCode || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户号">{{ tradeDetail.master.customerId }}</el-descriptions-item>
+              <el-descriptions-item label="客户名称">{{ tradeDetail.master.customerName }}</el-descriptions-item>
+              <el-descriptions-item label="货币对">{{ tradeDetail.master.currencyPair }}</el-descriptions-item>
+              <el-descriptions-item label="买卖方向">{{ formatTradeDirection(tradeDetail.master.tradeDirection) }}</el-descriptions-item>
+              <el-descriptions-item label="金额">{{ tradeDetail.master.notionalAmount }}</el-descriptions-item>
+              <el-descriptions-item label="交易日">{{ tradeDetail.master.tradeDate }}</el-descriptions-item>
+              <el-descriptions-item label="起息日">{{ tradeDetail.master.valueDate }}</el-descriptions-item>
+              <el-descriptions-item label="到期日">{{ tradeDetail.master.maturityDate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="交割类型">{{ formatOptionDeliveryType(tradeDetail.master.deliveryType) }}</el-descriptions-item>
+              <el-descriptions-item label="交割方式">{{ formatSettlementMethod(tradeDetail.master.settlementMethod) }}</el-descriptions-item>
+              <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">汇率信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="即期汇率">{{ tradeDetail.master.spotRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户汇率">{{ tradeDetail.master.customerRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="成本汇率">{{ tradeDetail.master.costRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="分行收益点">{{ tradeDetail.master.branchProfitPoint || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="远期汇率">{{ tradeDetail.forwardDetail?.forwardRate || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">账户信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="币种1账户">{{ tradeDetail.forwardDetail?.currency1Account || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="币种2账户">{{ tradeDetail.forwardDetail?.currency2Account || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="保证金账户">{{ tradeDetail.forwardDetail?.marginAccountId || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="保证金金额">{{ tradeDetail.forwardDetail?.marginAmount || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </template>
+
+          <!-- ==================== 掉期交易详情 ==================== -->
+          <template v-else-if="tradeDetail.master.tradeType === 'SWAP'">
+            <el-divider content-position="left">基本信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="业务编号">{{ tradeDetail.master.businessNo }}</el-descriptions-item>
+              <el-descriptions-item label="交易类型">{{ formatTradeType(tradeDetail.master.tradeType) }}</el-descriptions-item>
+              <el-descriptions-item label="特殊交易类型">{{ formatSpecialTradeType(tradeDetail.master.specialTradeType) || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="交易状态">
+                <el-tag :type="getStatusTagType(tradeDetail.master.status)" size="small">{{ formatTradeStatus(tradeDetail.master.status) }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="交易机构">{{ tradeDetail.master.branchCode || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="客户号">{{ tradeDetail.master.customerId }}</el-descriptions-item>
+              <el-descriptions-item label="客户名称">{{ tradeDetail.master.customerName }}</el-descriptions-item>
+              <el-descriptions-item label="货币对">{{ tradeDetail.master.currencyPair }}</el-descriptions-item>
+              <el-descriptions-item label="掉期类型">{{ formatSwapType(tradeDetail.swapDetail?.swapType) }}</el-descriptions-item>
+              <el-descriptions-item label="交易日">{{ tradeDetail.master.tradeDate }}</el-descriptions-item>
+              <el-descriptions-item label="用途编码">{{ tradeDetail.master.purposeCode || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">近端交易信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="近端方向">{{ formatTradeDirection(tradeDetail.swapDetail?.nearLegDirection) }}</el-descriptions-item>
+              <el-descriptions-item label="近端金额">{{ tradeDetail.swapDetail?.nearLegAmount || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="近端起息日">{{ tradeDetail.swapDetail?.nearLegValueDate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="近端交割方式">{{ formatSettlementMethod(tradeDetail.swapDetail?.nearLegSettlementMethod) }}</el-descriptions-item>
+              <el-descriptions-item label="近端分行收益点">{{ tradeDetail.swapDetail?.nearLegBranchProfitPoint || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="近端成本汇率">{{ tradeDetail.swapDetail?.nearLegCostRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="近端客户汇率">{{ tradeDetail.swapDetail?.nearLegCustomerRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="近端币种1账户">{{ tradeDetail.swapDetail?.nearLegCurrency1Account || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="近端币种2账户">{{ tradeDetail.swapDetail?.nearLegCurrency2Account || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">远端交易信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="远端方向">{{ formatTradeDirection(tradeDetail.swapDetail?.farLegDirection) }}</el-descriptions-item>
+              <el-descriptions-item label="远端金额">{{ tradeDetail.swapDetail?.farLegAmount || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="远端到期日">{{ tradeDetail.swapDetail?.farLegValueDate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="期限">{{ calcSwapTerm(tradeDetail.swapDetail?.nearLegValueDate, tradeDetail.swapDetail?.farLegValueDate) }}</el-descriptions-item>
+              <el-descriptions-item label="远端交割方式">{{ formatSettlementMethod(tradeDetail.swapDetail?.farLegSettlementMethod) }}</el-descriptions-item>
+              <el-descriptions-item label="远端分行收益点">{{ tradeDetail.swapDetail?.farLegBranchProfitPoint || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="远端成本汇率">{{ tradeDetail.swapDetail?.farLegCostRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="远端客户汇率">{{ tradeDetail.swapDetail?.farLegCustomerRate || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="远端币种1账户">{{ tradeDetail.swapDetail?.farLegCurrency1Account || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="远端币种2账户">{{ tradeDetail.swapDetail?.farLegCurrency2Account || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-divider content-position="left">保证金信息</el-divider>
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="保证金账户">{{ tradeDetail.swapDetail?.marginAccountId || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="保证金金额">{{ tradeDetail.swapDetail?.marginAmount || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </template>
+
+          <!-- 经办信息（所有交易类型通用） -->
+          <el-divider content-position="left">经办信息</el-divider>
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="经办人">{{ tradeDetail.makerName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="复核人">{{ tradeDetail.checkerName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="经办时间">{{ tradeDetail.master.makeTime || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="复核时间">{{ tradeDetail.master.checkTime || '-' }}</el-descriptions-item>
           </el-descriptions>
         </template>
 

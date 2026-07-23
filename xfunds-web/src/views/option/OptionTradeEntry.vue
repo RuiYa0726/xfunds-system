@@ -70,8 +70,7 @@ const form = reactive({
   premiumCurrency: 'CNY',
   observationStartDate: '',
   observationEndDate: '',
-  purposeCode: '',
-  fxPurposeCode: ''
+  purposeCode: ''
 })
 
 // 是否美式期权
@@ -378,7 +377,6 @@ async function loadTradeForEdit(tradeId) {
     form.deliveryType = master.deliveryType || 'T2'
     form.deliveryDate = master.valueDate || ''
     form.purposeCode = master.purposeCode || ''
-    form.fxPurposeCode = master.fxPurposeCode || ''
 
     form.currency1Account = option.currency1Account || ''
     form.currency2Account = option.currency2Account || ''
@@ -786,11 +784,6 @@ onMounted(() => {
           <el-col :span="12">
             <el-form-item label="用途编码">
               <el-input v-model="form.purposeCode" placeholder="选填" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="结售汇用途编码">
-              <el-input v-model="form.fxPurposeCode" placeholder="选填" />
             </el-form-item>
           </el-col>
         </el-row>

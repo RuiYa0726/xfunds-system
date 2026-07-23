@@ -92,7 +92,10 @@ async function loadReminders() {
   reminderLoading.value = true
   try {
     const res = await getOptionWorkbench()
-    reminderData.value = res.data?.records || res.data?.list || res.data || []
+    const list = res.data?.records || res.data?.list || res.data || []
+    // 按交易日期逆序排序（日期越晚越靠上）
+    list.sort((a, b) => (b.tradeDate || '').localeCompare(a.tradeDate || ''))
+    reminderData.value = list
   } catch (e) {
     reminderData.value = []
   } finally {

@@ -40,7 +40,6 @@
         <result column="check_time" property="checkTime"/>
         <result column="authorize_time" property="authorizeTime"/>
         <result column="purpose_code" property="purposeCode"/>
-        <result column="fx_purpose_code" property="fxPurposeCode"/>
         <result column="rcpmis_report_flag" property="rcpmisReportFlag"/>
         <result column="rcpmis_report_time" property="rcpmisReportTime"/>
         <result column="version" property="version"/>
@@ -56,7 +55,7 @@
         original_trade_type, original_trade_id, related_trade_id,
         netting_currency, netting_account, netting_amount,
         maker_id, checker_id, authorizer_id,
-        make_time, check_time, authorize_time, purpose_code, fx_purpose_code,
+        make_time, check_time, authorize_time, purpose_code,
         rcpmis_report_flag, rcpmis_report_time, version, created_at, updated_at
     </sql>
 
@@ -70,7 +69,7 @@
                t.original_trade_type, t.original_trade_id, t.related_trade_id,
                t.netting_currency, t.netting_account, t.netting_amount,
                t.maker_id, t.checker_id, t.authorizer_id,
-               t.make_time, t.check_time, t.authorize_time, t.purpose_code, t.fx_purpose_code,
+               t.make_time, t.check_time, t.authorize_time, t.purpose_code,
                t.rcpmis_report_flag, t.rcpmis_report_time, t.version, t.created_at, t.updated_at
         FROM fx_trade_master t
         LEFT JOIN fx_org o ON t.branch_code = o.org_code
@@ -154,7 +153,7 @@
                t.original_trade_type, t.original_trade_id, t.related_trade_id,
                t.netting_currency, t.netting_account, t.netting_amount,
                t.maker_id, t.checker_id, t.authorizer_id,
-               t.make_time, t.check_time, t.authorize_time, t.purpose_code, t.fx_purpose_code,
+               t.make_time, t.check_time, t.authorize_time, t.purpose_code,
                t.rcpmis_report_flag, t.rcpmis_report_time, t.version, t.created_at, t.updated_at
         FROM fx_trade_master t
         LEFT JOIN fx_org o ON t.branch_code = o.org_code
@@ -190,7 +189,7 @@
             cost_rate, branch_profit_point, special_trade_type, original_trade_type,
             original_trade_id, related_trade_id, netting_currency, netting_account,
             netting_amount, maker_id, checker_id, authorizer_id, make_time, check_time,
-            authorize_time, purpose_code, fx_purpose_code, rcpmis_report_flag,
+            authorize_time, purpose_code, rcpmis_report_flag,
             rcpmis_report_time, version, created_at, updated_at)
         VALUES (#{tradeId}, #{businessNo}, #{tradeType}, #{status}, #{branchCode},
             #{customerId}, #{customerName}, #{baseCurrency}, #{quoteCurrency}, #{currencyPair},
@@ -199,7 +198,7 @@
             #{costRate}, #{branchProfitPoint}, #{specialTradeType}, #{originalTradeType},
             #{originalTradeId}, #{relatedTradeId}, #{nettingCurrency}, #{nettingAccount},
             #{nettingAmount}, #{makerId}, #{checkerId}, #{authorizerId}, #{makeTime}, #{checkTime},
-            #{authorizeTime}, #{purposeCode}, #{fxPurposeCode}, #{rcpmisReportFlag},
+            #{authorizeTime}, #{purposeCode}, #{rcpmisReportFlag},
             #{rcpmisReportTime}, #{version}, NOW(), NOW())
     </insert>
 
@@ -237,7 +236,6 @@
             branch_profit_point = #{branchProfitPoint},
             special_trade_type = #{specialTradeType},
             purpose_code = #{purposeCode},
-            fx_purpose_code = #{fxPurposeCode},
             maker_id = #{makerId},
             make_time = #{makeTime},
             checker_id = #{checkerId},

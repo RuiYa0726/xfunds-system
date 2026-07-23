@@ -401,9 +401,6 @@ onMounted(() => {
           <el-descriptions-item label="最近执行摘要">
             {{ info?.latestRunSummary || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="任务说明" :span="2">
-            {{ info?.description || '-' }}
-          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -461,9 +458,6 @@ onMounted(() => {
             </template>
           </el-table-column>
           <el-table-column prop="durationMs" label="耗时(ms)" width="100" align="right" />
-          <el-table-column label="操作人" width="120">
-            <template #default="{ row }">{{ operatorText(row) }}</template>
-          </el-table-column>
           <el-table-column prop="errorMessage" label="错误信息" min-width="200" show-overflow-tooltip>
             <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
           </el-table-column>
