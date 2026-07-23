@@ -1,0 +1,1 @@
+import{s as e}from"./_plugin-vue_export-helper-b1edd38a.js";function r(t){return e({url:"/quote/spot",method:"get",params:t})}function u(t){return e({url:"/quote/forward",method:"get",params:t})}function s(t){return e({url:"/quote/swap",method:"get",params:t})}export{u as a,s as b,r as g};

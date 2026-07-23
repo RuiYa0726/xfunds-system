@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxCustomerAccountMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxCustomerAccount">
+        <id column="account_id" property="accountId"/>
+        <result column="customer_id" property="customerId"/>
+        <result column="account_no" property="accountNo"/>
+        <result column="currency" property="currency"/>
+        <result column="account_type" property="accountType"/>
+        <result column="balance" property="balance"/>
+        <result column="cny_balance" property="cnyBalance"/>
+        <result column="frozen_amount" property="frozenAmount"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        account_id, customer_id, account_no, currency, account_type, balance,
+        cny_balance, frozen_amount, status, created_at, updated_at
+    </sql>
+
+    <select id="selectByCustomerId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer_account
+        WHERE customer_id = #{customerId}
+    </select>
+
+    <select id="selectByAccountId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer_account
+        WHERE account_id = #{accountId}
+    </select>
+
+    <select id="selectByAccountNo" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer_account
+        WHERE account_no = #{accountNo}
+        LIMIT 1
+    </select>
+
+    <select id="selectByCustomerIdAndCurrency" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer_account
+        WHERE customer_id = #{customerId}
+        <if test="currency != null and currency != ''">
+            AND currency = #{currency}
+        </if>
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer_account
+    </select>
+
+    <!-- 汇总客户名下启用账户的折人民币余额（AUM），仅统计 status='1' 的账户 -->
+    <select id="sumCnyBalanceByCustomerId" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(cny_balance), 0)
+        FROM fx_customer_account
+        WHERE customer_id = #{customerId}
+          AND status = '1'
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxCustomerAccount" useGeneratedKeys="true" keyProperty="accountId">
+        INSERT INTO fx_customer_account (customer_id, account_no, currency, account_type,
+            balance, cny_balance, frozen_amount, status, created_at, updated_at)
+        VALUES (#{customerId}, #{accountNo}, #{currency}, #{accountType},
+            #{balance}, #{cnyBalance}, #{frozenAmount}, #{status}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxCustomerAccount">
+        UPDATE fx_customer_account
+        SET account_no = #{accountNo},
+            currency = #{currency},
+            account_type = #{accountType},
+            balance = #{balance},
+            cny_balance = #{cnyBalance},
+            frozen_amount = #{frozenAmount},
+            status = #{status},
+            updated_at = NOW()
+        WHERE account_id = #{accountId}
+    </update>
+
+</mapper>

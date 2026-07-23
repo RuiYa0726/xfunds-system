@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxSpotTradeMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxSpotTrade">
+        <id column="trade_id" property="tradeId"/>
+        <result column="settlement_type" property="settlementType"/>
+        <result column="spot_rate" property="spotRate"/>
+        <result column="customer_rate" property="customerRate"/>
+        <result column="cost_rate" property="costRate"/>
+        <result column="currency1_account" property="currency1Account"/>
+        <result column="currency2_account" property="currency2Account"/>
+        <result column="margin_account_id" property="marginAccountId"/>
+        <result column="margin_amount" property="marginAmount"/>
+        <result column="amount" property="amount"/>
+    </resultMap>
+
+    <select id="selectByTradeId" resultMap="BaseResultMap">
+        SELECT trade_id, settlement_type, spot_rate, customer_rate, cost_rate,
+               currency1_account, currency2_account, margin_account_id, margin_amount, amount
+        FROM fx_spot_trade
+        WHERE trade_id = #{tradeId}
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxSpotTrade">
+        INSERT INTO fx_spot_trade (trade_id, settlement_type, spot_rate, customer_rate, cost_rate,
+            currency1_account, currency2_account, margin_account_id, margin_amount, amount)
+        VALUES (#{tradeId}, #{settlementType}, #{spotRate}, #{customerRate}, #{costRate},
+            #{currency1Account}, #{currency2Account}, #{marginAccountId}, #{marginAmount}, #{amount})
+    </insert>
+
+    <delete id="deleteByTradeId">
+        DELETE FROM fx_spot_trade WHERE trade_id = #{tradeId}
+    </delete>
+
+</mapper>

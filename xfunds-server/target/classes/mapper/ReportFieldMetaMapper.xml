@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.ReportFieldMetaMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.ReportFieldMeta">
+        <id column="id" property="id"/>
+        <result column="field_code" property="fieldCode"/>
+        <result column="column_expr" property="columnExpr"/>
+        <result column="display_name_cn" property="displayNameCn"/>
+        <result column="data_type" property="dataType"/>
+        <result column="is_dimension" property="isDimension"/>
+        <result column="is_metric" property="isMetric"/>
+        <result column="is_filterable" property="isFilterable"/>
+        <result column="default_agg" property="defaultAgg"/>
+        <result column="source_table" property="sourceTable"/>
+        <result column="category" property="category"/>
+        <result column="sort_order" property="sortOrder"/>
+        <result column="enabled" property="enabled"/>
+        <result column="sensitive_level" property="sensitiveLevel"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, field_code, column_expr, display_name_cn, data_type, is_dimension, is_metric,
+        is_filterable, default_agg, source_table, category, sort_order, enabled, sensitive_level, created_at
+    </sql>
+
+    <select id="selectAllEnabled" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM report_field_meta
+        WHERE enabled = 'Y'
+        ORDER BY category, sort_order
+    </select>
+
+    <select id="selectByFieldCodes" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM report_field_meta
+        WHERE enabled = 'Y'
+        AND field_code IN
+        <foreach collection="fieldCodes" item="code" open="(" close=")" separator=",">
+            #{code}
+        </foreach>
+    </select>
+
+    <select id="selectByFieldCode" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM report_field_meta
+        WHERE field_code = #{fieldCode}
+    </select>
+
+    <!--
+        动态查询：selectClause、fromClause、groupByClause 均由 Service 层基于白名单拼装，
+        使用 ${} 注入（安全，因为来源是数据库白名单 column_expr，非用户输入）。
+        filters 的 column_expr 也来自白名单，值使用 #{} 预编译占位。
+    -->
+    <select id="executeDynamicQuery" resultType="java.util.LinkedHashMap">
+        SELECT ${selectClause}
+        FROM ${fromClause}
+        <where>
+            <if test="filters != null and filters.size() > 0">
+                <foreach collection="filters" item="f" separator=" AND ">
+                    <choose>
+                        <when test="f.operator == 'EQ'">
+                            ${f.columnExpr} = #{f.value}
+                        </when>
+                        <when test="f.operator == 'NE'">
+                            ${f.columnExpr} != #{f.value}
+                        </when>
+                        <when test="f.operator == 'LT'">
+                            ${f.columnExpr} &lt; #{f.value}
+                        </when>
+                        <when test="f.operator == 'LE'">
+                            ${f.columnExpr} &lt;= #{f.value}
+                        </when>
+                        <when test="f.operator == 'GT'">
+                            ${f.columnExpr} &gt; #{f.value}
+                        </when>
+                        <when test="f.operator == 'GE'">
+                            ${f.columnExpr} &gt;= #{f.value}
+                        </when>
+                        <when test="f.operator == 'LIKE'">
+                            ${f.columnExpr} LIKE CONCAT('%', #{f.value}, '%')
+                        </when>
+                        <when test="f.operator == 'BETWEEN'">
+                            ${f.columnExpr} BETWEEN #{f.value} AND #{f.value2}
+                        </when>
+                        <when test="f.operator == 'IN'">
+                            ${f.columnExpr} IN
+                            <foreach collection="f.values" item="v" open="(" close=")" separator=",">
+                                #{v}
+                            </foreach>
+                        </when>
+                    </choose>
+                </foreach>
+            </if>
+            <if test="!isAdmin and orgCode != null and orgCode != ''">
+                AND t.branch_code = #{orgCode}
+            </if>
+        </where>
+        <if test="groupByClause != null and groupByClause != ''">
+            GROUP BY ${groupByClause}
+        </if>
+        <choose>
+            <when test="orderByClause != null and orderByClause != ''">
+                ORDER BY ${orderByClause}
+            </when>
+            <when test="groupByClause != null and groupByClause != ''">
+                ORDER BY ${groupByClause}
+            </when>
+            <otherwise>
+                ORDER BY t.trade_date DESC
+            </otherwise>
+        </choose>
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <select id="executeAnalysisQuery" resultType="java.util.LinkedHashMap">
+        SELECT ${selectClause}
+        FROM ${fromClause}
+        WHERE 1=1
+        <if test="analysisType != null and analysisType != ''">
+            AND (t.trade_date BETWEEN #{currentStartDate} AND #{currentEndDate}
+                 OR t.trade_date BETWEEN #{compareStartDate} AND #{compareEndDate})
+        </if>
+        <if test="filters != null and filters.size() > 0">
+            <foreach collection="filters" item="f" separator=" AND ">
+                AND
+                <choose>
+                    <when test="f.operator == 'EQ'">
+                        ${f.columnExpr} = #{f.value}
+                    </when>
+                    <when test="f.operator == 'NE'">
+                        ${f.columnExpr} != #{f.value}
+                    </when>
+                    <when test="f.operator == 'LT'">
+                        ${f.columnExpr} &lt; #{f.value}
+                    </when>
+                    <when test="f.operator == 'LE'">
+                        ${f.columnExpr} &lt;= #{f.value}
+                    </when>
+                    <when test="f.operator == 'GT'">
+                        ${f.columnExpr} &gt; #{f.value}
+                    </when>
+                    <when test="f.operator == 'GE'">
+                        ${f.columnExpr} &gt;= #{f.value}
+                    </when>
+                    <when test="f.operator == 'LIKE'">
+                        ${f.columnExpr} LIKE CONCAT('%', #{f.value}, '%')
+                    </when>
+                    <when test="f.operator == 'BETWEEN'">
+                        ${f.columnExpr} BETWEEN #{f.value} AND #{f.value2}
+                    </when>
+                    <when test="f.operator == 'IN'">
+                        ${f.columnExpr} IN
+                        <foreach collection="f.values" item="v" open="(" close=")" separator=",">
+                            #{v}
+                        </foreach>
+                    </when>
+                </choose>
+            </foreach>
+        </if>
+        <if test="!isAdmin and orgCode != null and orgCode != ''">
+            AND t.branch_code = #{orgCode}
+        </if>
+        <if test="groupByClause != null and groupByClause != ''">
+            GROUP BY ${groupByClause}
+        </if>
+        <choose>
+            <when test="orderByClause != null and orderByClause != ''">
+                ORDER BY ${orderByClause}
+            </when>
+            <when test="groupByClause != null and groupByClause != ''">
+                ORDER BY ${groupByClause}
+            </when>
+            <otherwise>
+                ORDER BY t.trade_date DESC
+            </otherwise>
+        </choose>
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+</mapper>

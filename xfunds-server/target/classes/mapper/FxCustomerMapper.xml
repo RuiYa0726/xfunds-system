@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxCustomerMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxCustomer">
+        <id column="customer_id" property="customerId"/>
+        <result column="customer_name" property="customerName"/>
+        <result column="customer_type" property="customerType"/>
+        <result column="id_type" property="idType"/>
+        <result column="id_no" property="idNo"/>
+        <result column="org_code" property="orgCode"/>
+        <result column="credit_level" property="creditLevel"/>
+        <result column="risk_level" property="riskLevel"/>
+        <result column="status" property="status"/>
+        <result column="contact_person" property="contactPerson"/>
+        <result column="contact_phone" property="contactPhone"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        customer_id, customer_name, customer_type, corp_type, id_type, id_no, org_code,
+        credit_level, risk_level, status, contact_person, contact_phone, created_at, updated_at
+    </sql>
+
+    <select id="selectByCustomerId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer
+        WHERE customer_id = #{customerId}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer
+        ORDER BY created_at
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxCustomer">
+        INSERT INTO fx_customer (customer_id, customer_name, customer_type, id_type, id_no,
+            org_code, credit_level, risk_level, status, contact_person, contact_phone, created_at, updated_at)
+        VALUES (#{customerId}, #{customerName}, #{customerType}, #{idType}, #{idNo},
+            #{orgCode}, #{creditLevel}, #{riskLevel}, #{status}, #{contactPerson}, #{contactPhone}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxCustomer">
+        UPDATE fx_customer
+        SET customer_name = #{customerName},
+            customer_type = #{customerType},
+            id_type = #{idType},
+            id_no = #{idNo},
+            org_code = #{orgCode},
+            credit_level = #{creditLevel},
+            risk_level = #{riskLevel},
+            status = #{status},
+            contact_person = #{contactPerson},
+            contact_phone = #{contactPhone},
+            updated_at = NOW()
+        WHERE customer_id = #{customerId}
+    </update>
+
+    <select id="selectByKeyword" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer
+        WHERE customer_id LIKE CONCAT('%', #{keyword}, '%')
+           OR customer_name LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY created_at
+    </select>
+
+    <select id="selectByCondition" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_customer
+        <where>
+            <if test="customerId != null and customerId != ''">
+                AND customer_id LIKE CONCAT('%', #{customerId}, '%')
+            </if>
+            <if test="customerName != null and customerName != ''">
+                AND customer_name LIKE CONCAT('%', #{customerName}, '%')
+            </if>
+            <if test="customerType != null and customerType != ''">
+                AND customer_type = #{customerType}
+            </if>
+            <if test="orgCode != null and orgCode != ''">
+                AND org_code = #{orgCode}
+            </if>
+        </where>
+        ORDER BY created_at
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countByCondition" resultType="long">
+        SELECT COUNT(1)
+        FROM fx_customer
+        <where>
+            <if test="customerId != null and customerId != ''">
+                AND customer_id LIKE CONCAT('%', #{customerId}, '%')
+            </if>
+            <if test="customerName != null and customerName != ''">
+                AND customer_name LIKE CONCAT('%', #{customerName}, '%')
+            </if>
+            <if test="customerType != null and customerType != ''">
+                AND customer_type = #{customerType}
+            </if>
+            <if test="orgCode != null and orgCode != ''">
+                AND org_code = #{orgCode}
+            </if>
+        </where>
+    </select>
+
+</mapper>

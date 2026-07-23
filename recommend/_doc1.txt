@@ -1,0 +1,461 @@
+﻿
+
+
+
+代客外汇交易系统
+客户产品推荐功能实现逻辑文档
+
+版本：V1.0
+日期：2026年7月3日
+密级：内部资料
+
+一、文档概述
+1.1 目的
+本文档基于《代客外汇交易系统客户画像与产品推荐规则文档V1.0》，明确客户产品推荐功能的端到端实现逻辑，指导开发团队完成从数据加工、标签计算、规则匹配到前端展示的全流程落地，确保推荐结果符合业务规则与合规要求。
+1.2 适用范围
+适用于代客外汇交易系统的后端规则引擎、数据ETL任务、前端展示模块的开发与测试。
+1.3 核心原则
+合规优先：所有推荐必须先通过硬性过滤，禁止向不适格客户推荐高风险产品
+可解释性：每一条推荐结果必须附带明确的业务理由，支撑客户经理沟通
+可配置性：业务规则支持动态调整，无需修改代码即可更新推荐逻辑
+高性能：离线计算标签，实时匹配规则，响应时间<200ms
+
+二、总体架构设计
+系统采用“离线标签计算+实时规则匹配”的混合架构，平衡数据准确性与接口性能。整体分为四层：
+
+┌───────────────────────────────┐
+│  数据源层              │
+│  · 交易系统            │
+│  · CRM系统             │
+│  · 核心资产系统        │
+│  · 行情系统            │
+└───────────────────────────────┘
+           ↓ ETL（每日凌晨）
+┌───────────────────────────────┐
+│  数据加工层（数据仓库） │
+│  · 客户交易指标宽表    │
+│  · 客户画像标签表      │
+│  · 产品规则配置表      │
+└───────────────────────────────┘
+           ↓ 数据同步（准实时）
+┌───────────────────────────────┐
+│  服务层                │
+│  · 推荐API（RESTful）   │
+│  · 规则引擎            │
+│  · 合规校验模块        │
+└───────────────────────────────┘
+           ↓ HTTP/gRPC
+┌───────────────────────────────┐
+│  应用层                │
+│  · 客户经理工作台（PC） │
+│  · 企业网银/个人手机银行│
+│  · 运营后台管理系统    │
+└───────────────────────────────┘
+
+三、数据模型设计
+3.1 客户画像标签表（dim_cust_portrait）
+存储客户四大维度的标签结果，作为推荐的核心输入。
+
+字段名
+类型
+说明
+来源
+cust_id
+VARCHAR(32)
+客户号（主键）
+CRM
+cust_type
+ENUM
+客户类型（CORP/RETAIL）
+CRM
+rfm_recency_days
+INT
+最近交易间隔天数
+交易表计算
+rfm_frequency_12m
+INT
+近12个月交易笔数
+交易表计算
+rfm_monetary_12m_cny
+DECIMAL(18,2)
+近12个月交易总额（cny）
+交易表计算
+rfm_label
+VARCHAR(50)
+RFM分群标签
+分箱规则计算
+aum_total_cny
+DECIMAL(18,2)
+总资产（CNY）
+资产表汇总
+aum_label
+VARCHAR(20)
+资产等级标签
+分箱规则
+risk_level
+ENUM
+风险等级
+KYC问卷
+has_derivative_license
+TINYINT(1)
+是否通过衍生品适当性认证
+CRM
+industry
+VARCHAR(50)
+行业
+CRM
+exposure_type
+ENUM
+敞口类型
+客户经理录入
+exposure_amount_usd
+DECIMAL(18,2)
+敞口预估金额
+业务录入
+tag_update_time
+DATETIME
+标签更新时间
+系统生成
+
+3.2 产品规则配置表（cfg_recommend_rule）
+支持业务动态配置推荐规则，避免硬编码。
+
+字段名
+类型
+说明
+rule_id
+VARCHAR(20)
+规则ID（如R001）
+rule_name
+VARCHAR(100)
+规则名称
+priority
+INT
+规则优先级（数值越大越优先）
+filter_condition
+TEXT
+客户筛选条件（SQL-like表达式）
+recommend_products
+VARCHAR(200)
+推荐产品列表（逗号分隔）
+exclude_products
+VARCHAR(200)
+排除产品列表
+reason_template
+TEXT
+推荐理由模板（支持占位符）
+status
+ENUM
+规则状态（ENABLED/DISABLED）
+
+字段名
+类型
+说明
+create_time
+DATETIME
+创建时间
+update_time
+DATETIME
+更新时间
+created_by
+VARCHAR(32)
+创建人
+
+3.3 推荐结果记录表（log_recommend_result）
+存储推荐日志，用于效果分析与合规审计。
+
+字段名
+类型
+说明
+id
+BIGINT
+主键
+cust_id
+VARCHAR(32)
+客户号
+channel
+VARCHAR(20)
+推荐渠道
+recommend_products
+TEXT
+推荐产品列表（JSON）
+trigger_rule_ids
+VARCHAR(100)
+触发的规则ID
+is_clicked
+TINYINT(1)
+是否被点击
+is_traded
+TINYINT(1)
+是否产生交易
+create_time
+DATETIME
+推荐时间
+
+四、核心实现流程
+4.1 阶段一：离线标签计算（每日批处理）
+执行时间：每日凌晨2:00，避免影响日间交易。
+
+处理逻辑：
+RFM指标计算：扫描fx_trade_master表，统计每个客户近12个月的交易数据
+AUM标签计算：关联fx_customer_account表，汇总客户资产并分箱
+RFM分箱：根据Recency/Frequency/Monetary分别打分并映射标签
+标签合并：将RFM、AUM、KYC、敞口等标签合并至dim_cust_portrait表
+数据质量校验：检查标签覆盖率、异常值，生成校验报告
+
+核心SQL — RFM指标和AUM指标计算：
+-- =========================================================
+-- 客户画像标签计算（RFM + AUM 不含保证金）
+-- 数据库：xfunds
+-- 更新频率：T+1
+-- =========================================================
+
+-- ---------- 1. RFM 计算 ----------
+WITH rfm AS (
+    SELECT
+        cust_id,
+        MAX(trade_date) AS last_trade_date,
+        DATEDIFF(CURDATE(), MAX(trade_date)) AS recency_days,
+        COUNT(*) AS frequency_12m,
+        SUM(counter_amount) AS monetary_12m_cny
+    FROM xfunds.fx_trade_master
+    WHERE trade_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+      AND status IN ('ACTIVE’, 'MATURED', 'SETTLED',’CLOSED’,’ROLLED_OVER’,’EARLY_SETTLED’,’EXERCISED’,’PREMIUM_SETTLED’)
+      AND counter_amount IS NOT NULL
+      AND cust_id IS NOT NULL
+    GROUP BY cust_id
+),
+
+-- ---------- 2. AUM 计算（不含保证金） ----------
+aum AS (
+    SELECT
+        cust_id,
+        SUM(cny_balance) AS deposit_aum_cny
+            FROM xfunds.fx_customer_balance
+    WHERE cny_balance IS NOT NULL
+    GROUP BY cust_id
+),
+
+-- ---------- 3. RFM 标签化 ----------
+rfm_label AS (
+    SELECT
+        cust_id,
+        last_trade_date,
+        recency_days,
+        frequency_12m,
+        ROUND(monetary_12m_cny, 2) AS monetary_12m_cny,
+
+        -- R 标签
+        CASE
+            WHEN recency_days <= 7  THEN 'R1-高活跃'
+            WHEN recency_days <= 30 THEN 'R2-活跃'
+            WHEN recency_days <= 90 THEN 'R3-一般'
+            ELSE 'R4-沉睡'
+        END AS r_label,
+
+        -- F 标签
+        CASE
+            WHEN frequency_12m >= 50 THEN 'F1-高频'
+            WHEN frequency_12m >= 20 THEN 'F2-中频'
+            WHEN frequency_12m >= 5  THEN 'F3-低频'
+            ELSE 'F4-极少'
+        END AS f_label,
+
+        -- M 标签
+        CASE
+            WHEN monetary_12m_cny >= 35000000 THEN 'M1-超高净值'
+            WHEN monetary_12m_cny >= 7000000  THEN 'M2-高净值'
+            WHEN monetary_12m_cny >= 700000   THEN 'M3-中资产'
+            ELSE 'M4-低资产'
+        END AS m_label,
+
+        -- RFM 组合编码（推荐用于规则引擎）
+        CONCAT(
+            CASE
+                WHEN recency_days <= 30 THEN 'A'
+                WHEN recency_days <= 90 THEN 'B'
+                ELSE 'C'
+            END,
+            CASE
+                WHEN frequency_12m >= 20 THEN '1'
+                WHEN frequency_12m >= 5  THEN '2'
+                ELSE '3'
+            END,
+            CASE
+                WHEN monetary_12m_cny >= 7000000 THEN '1'
+                WHEN monetary_12m_cny >= 700000  THEN '2'
+                ELSE '3'
+            END
+        ) AS rfm_segment
+    FROM rfm
+),
+
+-- ---------- 4. AUM 标签化 ----------
+aum_label AS (
+    SELECT
+        cust_id,
+        ROUND(deposit_aum_cny, 2) AS deposit_aum_cny,
+       
+        -- AUM 标签（基于可用资金）
+        CASE
+            WHEN deposit_aum_cny >= 35000000 THEN 'AUM1-超高净值'
+            WHEN deposit_aum_cny >= 7000000  THEN 'AUM2-高净值'
+            WHEN deposit_aum_cny >= 700000   THEN 'AUM3-中资产'
+            ELSE 'AUM4-低资产'
+        END AS aum_label
+    FROM aum
+)
+
+-- ---------- 5. 合并为客户画像宽表 ----------
+INSERT OVERWRITE TABLE dim_cust_portrait
+SELECT
+    COALESCE(r.cust_id, a.cust_id, c.customer_id) AS cust_id,
+
+    -- RFM
+    r.recency_days,
+    r.frequency_12m,
+    r.monetary_12m_cny,
+    r.r_label,
+    r.f_label,
+    r.m_label,
+    r.rfm_segment,
+
+    -- AUM（不含保证金）
+    COALESCE(a.deposit_aum_cny, 0) AS deposit_aum_cny,
+    a.aum_label,
+
+    -- KYC 基础信息
+    c.customer_type,
+    c.credit_level,
+
+    -- 元数据
+    CURRENT_TIMESTAMP AS tag_update_time
+FROM xfunds.fx_customer c
+LEFT JOIN rfm_label r ON c.customer_id = r.cust_id
+LEFT JOIN aum_label a ON c.customer_id = a.cust_id;
+
+4.2 阶段二：实时推荐接口（API层）
+接口定义：POST /api/v1/recommend/products
+
+请求参数示例：
+{
+  "cust_id": "CUST20230001",
+  "channel": "RM_WORKSTATION",
+  "context": {
+    "inquiry_ccy": "USD/CNY",
+    "inquiry_amount": 500000,
+    "current_rate": 7.25
+  }
+}
+
+处理步骤：
+步骤1：客户画像加载
+从dim_cust_portrait表读取客户全量标签，若不存在则降级为默认标签（仅推荐即期）。
+步骤2：合规硬过滤
+按照规则文档第四章，执行四层硬性过滤，不满足条件的产品直接剔除：
+
+过滤层级
+过滤条件
+剔除产品
+风险等级过滤
+保守型（C）客户
+普通期权、加强远期、比率远期、区间远期
+适当性认证过滤
+未通过衍生品测评
+远期、掉期、加强远期、比率远期、区间远期
+AUM覆盖过滤
+AUM < 10万美元
+比率远期、普通期权
+客户类型过滤
+个人客户
+比率远期、价优远期
+
+步骤3：规则匹配
+按照规则文档第五章，按优先级匹配客户场景：
+
+优先级
+场景
+匹配条件
+推荐产品
+1
+高价值活跃套保型企业
+RFM高 + 企业客户 + 有敞口
+远期、价优远期、区间远期、加强远期
+2
+进出口制造/贸易行业
+行业=Manufacturing/Trading
+比率远期、掉期、远期
+3
+中低频/稳健型
+交易频次低 + AUM较高
+加强即期、即期、普通期权
+4
+休眠/低价值
+R值>180天
+即期、加强即期
+
+步骤4：推荐理由生成
+根据匹配到的规则，填充理由模板，生成自然语言解释。
+
+步骤5：结果排序与返回
+按规则优先级排序，最多返回Top 3产品，同时记录推荐日志至log_recommend_result表。
+
+返回结果示例：
+{
+  "code": 0,
+  "data": {
+    "cust_id": "CUST20230001",
+    "recommendations": [
+      {
+        "product_code": "FORWARD",
+        "product_name": "远期外汇买卖",
+        "priority": 1,
+        "reason": "根据您的贸易背景，贵司预计有200万美元...",
+        "action_url": "/trade/forward?custId=..."
+      }
+    ]
+  }
+}
+
+4.3 阶段三：前端展示逻辑
+客户经理工作台
+展示位置：客户360视图 → 推荐产品卡片
+查看推荐产品详情
+一键跳转交易页面
+手动调整推荐结果（需记录调整原因）
+复制推荐理由给客户
+
+五、异常处理与降级策略
+
+异常场景
+处理方式
+返回结果
+客户标签不存在
+降级为默认标签
+仅推荐即期产品
+规则配置表为空
+使用内置默认规则
+按RFM分群推荐基础产品
+数据库连接超时
+返回缓存结果（最近1小时）
+推荐缓存中的产品
+推荐结果为空
+兆底推荐
+推荐即期+加强即期
+行情接口超时
+跳过行情依赖逻辑
+基于标签静态推荐
+
+六、测试验证方案
+6.1 单元测试
+验证RFM分箱逻辑正确性（各分箱边界值测试）
+验证合规过滤规则准确性（四类硬过滤全覆盖）
+验证推荐理由模板渲染（占位符替换）
+6.2 集成测试
+模拟不同画像客户，验证推荐结果是否符合规则矩阵
+验证接口性能（并发1000QPS，响应时间<200ms）
+验证日志记录完整性（推荐/点击/交易全链路）
+
+
+
+— 文档结束 —

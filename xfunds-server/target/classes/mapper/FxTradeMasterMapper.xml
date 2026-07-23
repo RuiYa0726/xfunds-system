@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxTradeMasterMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxTradeMaster">
+        <id column="trade_id" property="tradeId"/>
+        <result column="business_no" property="businessNo"/>
+        <result column="trade_type" property="tradeType"/>
+        <result column="status" property="status"/>
+        <result column="branch_code" property="branchCode"/>
+        <result column="branch_name" property="branchName"/>
+        <result column="customer_id" property="customerId"/>
+        <result column="customer_name" property="customerName"/>
+        <result column="base_currency" property="baseCurrency"/>
+        <result column="quote_currency" property="quoteCurrency"/>
+        <result column="currency_pair" property="currencyPair"/>
+        <result column="notional_amount" property="notionalAmount"/>
+        <result column="counter_amount" property="counterAmount"/>
+        <result column="trade_direction" property="tradeDirection"/>
+        <result column="value_date" property="valueDate"/>
+        <result column="trade_date" property="tradeDate"/>
+        <result column="maturity_date" property="maturityDate"/>
+        <result column="delivery_type" property="deliveryType"/>
+        <result column="settlement_method" property="settlementMethod"/>
+        <result column="spot_rate" property="spotRate"/>
+        <result column="customer_rate" property="customerRate"/>
+        <result column="cost_rate" property="costRate"/>
+        <result column="branch_profit_point" property="branchProfitPoint"/>
+        <result column="special_trade_type" property="specialTradeType"/>
+        <result column="original_trade_type" property="originalTradeType"/>
+        <result column="original_trade_id" property="originalTradeId"/>
+        <result column="related_trade_id" property="relatedTradeId"/>
+        <result column="netting_currency" property="nettingCurrency"/>
+        <result column="netting_account" property="nettingAccount"/>
+        <result column="netting_amount" property="nettingAmount"/>
+        <result column="maker_id" property="makerId"/>
+        <result column="checker_id" property="checkerId"/>
+        <result column="authorizer_id" property="authorizerId"/>
+        <result column="make_time" property="makeTime"/>
+        <result column="check_time" property="checkTime"/>
+        <result column="authorize_time" property="authorizeTime"/>
+        <result column="purpose_code" property="purposeCode"/>
+        <result column="fx_purpose_code" property="fxPurposeCode"/>
+        <result column="rcpmis_report_flag" property="rcpmisReportFlag"/>
+        <result column="rcpmis_report_time" property="rcpmisReportTime"/>
+        <result column="version" property="version"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        trade_id, business_no, trade_type, status, branch_code, customer_id, customer_name,
+        base_currency, quote_currency, currency_pair, notional_amount, counter_amount,
+        trade_direction, value_date, trade_date, maturity_date, delivery_type, settlement_method,
+        spot_rate, customer_rate, cost_rate, branch_profit_point, special_trade_type,
+        original_trade_type, original_trade_id, related_trade_id,
+        netting_currency, netting_account, netting_amount,
+        maker_id, checker_id, authorizer_id,
+        make_time, check_time, authorize_time, purpose_code, fx_purpose_code,
+        rcpmis_report_flag, rcpmis_report_time, version, created_at, updated_at
+    </sql>
+
+    <select id="selectByTradeId" resultMap="BaseResultMap">
+        SELECT t.trade_id, t.business_no, t.trade_type, t.status, t.branch_code,
+               o.org_name AS branch_name,
+               t.customer_id, t.customer_name,
+               t.base_currency, t.quote_currency, t.currency_pair, t.notional_amount, t.counter_amount,
+               t.trade_direction, t.value_date, t.trade_date, t.maturity_date, t.delivery_type, t.settlement_method,
+               t.spot_rate, t.customer_rate, t.cost_rate, t.branch_profit_point, t.special_trade_type,
+               t.original_trade_type, t.original_trade_id, t.related_trade_id,
+               t.netting_currency, t.netting_account, t.netting_amount,
+               t.maker_id, t.checker_id, t.authorizer_id,
+               t.make_time, t.check_time, t.authorize_time, t.purpose_code, t.fx_purpose_code,
+               t.rcpmis_report_flag, t.rcpmis_report_time, t.version, t.created_at, t.updated_at
+        FROM fx_trade_master t
+        LEFT JOIN fx_org o ON t.branch_code = o.org_code
+        WHERE t.trade_id = #{tradeId}
+    </select>
+
+    <select id="selectByBusinessNo" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_trade_master
+        WHERE business_no = #{businessNo}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_trade_master
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 通用查询条件片段（列名需带 t. 表别名，因 selectByCondition 关联了 fx_org 表） -->
+    <sql id="Condition_Where">
+        <where>
+            <if test="businessNo != null and businessNo != ''">
+                AND t.business_no LIKE CONCAT('%', #{businessNo}, '%')
+            </if>
+            <if test="tradeType != null and tradeType != ''">
+                AND t.trade_type = #{tradeType}
+            </if>
+            <if test="status != null and status != ''">
+                AND t.status = #{status}
+            </if>
+            <if test="specialTradeType != null and specialTradeType != ''">
+                AND t.special_trade_type = #{specialTradeType}
+            </if>
+            <if test="currencyPair != null and currencyPair != ''">
+                AND t.currency_pair LIKE CONCAT('%', #{currencyPair}, '%')
+            </if>
+            <if test="branchCode != null and branchCode != ''">
+                AND t.branch_code LIKE CONCAT('%', #{branchCode}, '%')
+            </if>
+            <if test="customerId != null and customerId != ''">
+                AND t.customer_id LIKE CONCAT('%', #{customerId}, '%')
+            </if>
+            <if test="statusList != null and statusList.size() > 0">
+                AND t.status IN
+                <foreach collection="statusList" item="s" open="(" separator="," close=")">
+                    #{s}
+                </foreach>
+            </if>
+            <if test="tradeTypeList != null and tradeTypeList.size() > 0">
+                AND t.trade_type IN
+                <foreach collection="tradeTypeList" item="t" open="(" separator="," close=")">
+                    #{t}
+                </foreach>
+            </if>
+            <if test="tradeIdList != null and tradeIdList.size() > 0">
+                AND t.trade_id IN
+                <foreach collection="tradeIdList" item="tid" open="(" separator="," close=")">
+                    #{tid}
+                </foreach>
+            </if>
+            <if test="maturityDateAfter != null">
+                AND t.maturity_date &gt; #{maturityDateAfter}
+            </if>
+            <if test="maturityDateBeforeOrEqual != null">
+                AND t.maturity_date &lt;= #{maturityDateBeforeOrEqual}
+            </if>
+            <if test="valueDateAfter != null">
+                AND t.value_date &gt; #{valueDateAfter}
+            </if>
+        </where>
+    </sql>
+
+    <!-- 分页条件查询：LEFT JOIN fx_org 取机构中文名称，列名带 t. 别名避免与 fx_org 同名列冲突 -->
+    <select id="selectByCondition" parameterType="map" resultMap="BaseResultMap">
+        SELECT t.trade_id, t.business_no, t.trade_type, t.status, t.branch_code,
+               o.org_name AS branch_name,
+               t.customer_id, t.customer_name,
+               t.base_currency, t.quote_currency, t.currency_pair, t.notional_amount, t.counter_amount,
+               t.trade_direction, t.value_date, t.trade_date, t.maturity_date, t.delivery_type, t.settlement_method,
+               t.spot_rate, t.customer_rate, t.cost_rate, t.branch_profit_point, t.special_trade_type,
+               t.original_trade_type, t.original_trade_id, t.related_trade_id,
+               t.netting_currency, t.netting_account, t.netting_amount,
+               t.maker_id, t.checker_id, t.authorizer_id,
+               t.make_time, t.check_time, t.authorize_time, t.purpose_code, t.fx_purpose_code,
+               t.rcpmis_report_flag, t.rcpmis_report_time, t.version, t.created_at, t.updated_at
+        FROM fx_trade_master t
+        LEFT JOIN fx_org o ON t.branch_code = o.org_code
+        <include refid="Condition_Where"/>
+        ORDER BY t.make_time DESC, t.trade_id DESC
+        LIMIT #{offset}, #{pageSize}
+    </select>
+
+    <select id="countByCondition" parameterType="map" resultType="long">
+        SELECT COUNT(1)
+        FROM fx_trade_master t
+        <include refid="Condition_Where"/>
+    </select>
+
+    <!-- 查询需要定时交割的交易：到期日 <= 指定日期 且 状态在给定列表内（按到期日升序处理） -->
+    <select id="selectToSettle" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_trade_master
+        WHERE maturity_date &lt;= #{maturityDate}
+          AND status IN
+          <foreach collection="statusList" item="s" open="(" separator="," close=")">
+              #{s}
+          </foreach>
+          AND (settlement_method IS NULL OR settlement_method != 'NONE')
+        ORDER BY maturity_date ASC
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxTradeMaster">
+        INSERT INTO fx_trade_master (trade_id, business_no, trade_type, status, branch_code,
+            customer_id, customer_name, base_currency, quote_currency, currency_pair,
+            notional_amount, counter_amount, trade_direction, value_date, trade_date,
+            maturity_date, delivery_type, settlement_method, spot_rate, customer_rate,
+            cost_rate, branch_profit_point, special_trade_type, original_trade_type,
+            original_trade_id, related_trade_id, netting_currency, netting_account,
+            netting_amount, maker_id, checker_id, authorizer_id, make_time, check_time,
+            authorize_time, purpose_code, fx_purpose_code, rcpmis_report_flag,
+            rcpmis_report_time, version, created_at, updated_at)
+        VALUES (#{tradeId}, #{businessNo}, #{tradeType}, #{status}, #{branchCode},
+            #{customerId}, #{customerName}, #{baseCurrency}, #{quoteCurrency}, #{currencyPair},
+            #{notionalAmount}, #{counterAmount}, #{tradeDirection}, #{valueDate}, #{tradeDate},
+            #{maturityDate}, #{deliveryType}, #{settlementMethod}, #{spotRate}, #{customerRate},
+            #{costRate}, #{branchProfitPoint}, #{specialTradeType}, #{originalTradeType},
+            #{originalTradeId}, #{relatedTradeId}, #{nettingCurrency}, #{nettingAccount},
+            #{nettingAmount}, #{makerId}, #{checkerId}, #{authorizerId}, #{makeTime}, #{checkTime},
+            #{authorizeTime}, #{purposeCode}, #{fxPurposeCode}, #{rcpmisReportFlag},
+            #{rcpmisReportTime}, #{version}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxTradeMaster">
+        UPDATE fx_trade_master
+        SET status = #{status},
+            checker_id = #{checkerId},
+            check_time = #{checkTime},
+            version = version + 1,
+            updated_at = NOW()
+        WHERE trade_id = #{tradeId} AND version = #{version}
+    </update>
+
+    <!-- 更新交易主表全部字段（用于退回重新编辑提交场景），带乐观锁 -->
+    <update id="updateAllFields" parameterType="com.xfunds.entity.FxTradeMaster">
+        UPDATE fx_trade_master
+        SET status = #{status},
+            branch_code = #{branchCode},
+            customer_id = #{customerId},
+            customer_name = #{customerName},
+            base_currency = #{baseCurrency},
+            quote_currency = #{quoteCurrency},
+            currency_pair = #{currencyPair},
+            notional_amount = #{notionalAmount},
+            counter_amount = #{counterAmount},
+            trade_direction = #{tradeDirection},
+            value_date = #{valueDate},
+            trade_date = #{tradeDate},
+            maturity_date = #{maturityDate},
+            delivery_type = #{deliveryType},
+            settlement_method = #{settlementMethod},
+            spot_rate = #{spotRate},
+            customer_rate = #{customerRate},
+            cost_rate = #{costRate},
+            branch_profit_point = #{branchProfitPoint},
+            special_trade_type = #{specialTradeType},
+            purpose_code = #{purposeCode},
+            fx_purpose_code = #{fxPurposeCode},
+            maker_id = #{makerId},
+            make_time = #{makeTime},
+            checker_id = #{checkerId},
+            check_time = #{checkTime},
+            version = version + 1,
+            updated_at = NOW()
+        WHERE trade_id = #{tradeId} AND version = #{version}
+    </update>
+
+    <update id="updateSettlementMethod">
+        UPDATE fx_trade_master
+        SET settlement_method = #{settlementMethod},
+            updated_at = NOW()
+        WHERE trade_id = #{tradeId}
+    </update>
+
+    <!-- 客户近12个月有效交易 RFM 指标：counter_amount 为空时用 notional*spot_rate 回退折算 CNY -->
+    <select id="selectRfmByCustomerId" resultType="java.util.Map">
+        SELECT
+            MAX(trade_date)                                                AS last_trade_date,
+            DATEDIFF(CURDATE(), MAX(trade_date))                           AS recency_days,
+            COUNT(*)                                                       AS frequency_12m,
+            COALESCE(SUM(COALESCE(counter_amount, notional_amount * COALESCE(spot_rate, customer_rate, 0))), 0) AS monetary_12m_cny
+        FROM fx_trade_master
+        WHERE customer_id = #{customerId}
+          AND trade_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+          AND status IN ('ACTIVE','MATURED','SETTLED','CLOSED','ROLLED_OVER','EARLY_SETTLED','EXERCISED','PREMIUM_SETTLED')
+    </select>
+
+    <!-- 查询客户全部有效交易（敞口方向、衍生品资质推断） -->
+    <select id="selectValidByCustomerId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_trade_master
+        WHERE customer_id = #{customerId}
+          AND status IN ('ACTIVE','MATURED','SETTLED','CLOSED','ROLLED_OVER','EARLY_SETTLED','EXERCISED','PREMIUM_SETTLED')
+        ORDER BY trade_date DESC
+    </select>
+
+</mapper>

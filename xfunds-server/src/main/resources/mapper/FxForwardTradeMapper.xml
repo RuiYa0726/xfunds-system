@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxForwardTradeMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxForwardTrade">
+        <id column="trade_id" property="tradeId"/>
+        <result column="maturity_date" property="maturityDate"/>
+        <result column="forward_rate" property="forwardRate"/>
+        <result column="forward_point" property="forwardPoint"/>
+        <result column="term" property="term"/>
+        <result column="settlement_method" property="settlementMethod"/>
+        <result column="net_settlement_amount" property="netSettlementAmount"/>
+        <result column="currency1_account" property="currency1Account"/>
+        <result column="currency2_account" property="currency2Account"/>
+        <result column="margin_account_id" property="marginAccountId"/>
+        <result column="margin_amount" property="marginAmount"/>
+        <result column="amount" property="amount"/>
+        <result column="is_rolled_over" property="isRolledOver"/>
+        <result column="original_trade_id" property="originalTradeId"/>
+        <result column="early_delivery_flag" property="earlyDeliveryFlag"/>
+        <result column="early_default_flag" property="earlyDefaultFlag"/>
+    </resultMap>
+
+    <select id="selectByTradeId" resultMap="BaseResultMap">
+        SELECT trade_id, maturity_date, forward_rate, forward_point, settlement_method,
+               net_settlement_amount, currency1_account, currency2_account,
+               margin_account_id, margin_amount, amount, is_rolled_over,
+               original_trade_id, early_delivery_flag, early_default_flag
+        FROM fx_forward_trade
+        WHERE trade_id = #{tradeId}
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxForwardTrade">
+        INSERT INTO fx_forward_trade (trade_id, maturity_date, forward_rate, forward_point, term,
+            settlement_method, net_settlement_amount, currency1_account, currency2_account,
+            margin_account_id, margin_amount, amount,
+            is_rolled_over, original_trade_id, early_delivery_flag, early_default_flag)
+        VALUES (#{tradeId}, #{maturityDate}, #{forwardRate}, #{forwardPoint}, #{term},
+            #{settlementMethod}, #{netSettlementAmount}, #{currency1Account}, #{currency2Account},
+            #{marginAccountId}, #{marginAmount}, #{amount},
+            #{isRolledOver}, #{originalTradeId}, #{earlyDeliveryFlag}, #{earlyDefaultFlag})
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxForwardTrade">
+        UPDATE fx_forward_trade
+        SET maturity_date = #{maturityDate},
+            forward_rate = #{forwardRate},
+            forward_point = #{forwardPoint},
+            term = #{term},
+            settlement_method = #{settlementMethod},
+            net_settlement_amount = #{netSettlementAmount},
+            currency1_account = #{currency1Account},
+            currency2_account = #{currency2Account},
+            margin_account_id = #{marginAccountId},
+            margin_amount = #{marginAmount},
+            amount = #{amount},
+            is_rolled_over = #{isRolledOver},
+            original_trade_id = #{originalTradeId},
+            early_delivery_flag = #{earlyDeliveryFlag},
+            early_default_flag = #{earlyDefaultFlag}
+        WHERE trade_id = #{tradeId}
+    </update>
+
+    <delete id="deleteByTradeId">
+        DELETE FROM fx_forward_trade WHERE trade_id = #{tradeId}
+    </delete>
+
+</mapper>

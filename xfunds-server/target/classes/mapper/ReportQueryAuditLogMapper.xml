@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.ReportQueryAuditLogMapper">
+
+    <insert id="insert" parameterType="com.xfunds.entity.ReportQueryAuditLog">
+        INSERT INTO report_query_audit_log
+            (user_id, username, org_code, query_fields, filter_conditions,
+             row_count, query_source, duration_ms, ip_address, created_at)
+        VALUES
+            (#{userId}, #{username}, #{orgCode}, #{queryFields}, #{filterConditions},
+             #{rowCount}, #{querySource}, #{durationMs}, #{ipAddress}, NOW())
+    </insert>
+
+</mapper>

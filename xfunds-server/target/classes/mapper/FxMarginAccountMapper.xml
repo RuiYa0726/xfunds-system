@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxMarginAccountMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxMarginAccount">
+        <id column="margin_account_id" property="marginAccountId"/>
+        <result column="customer_id" property="customerId"/>
+        <result column="currency" property="currency"/>
+        <result column="balance" property="balance"/>
+        <result column="frozen_amount" property="frozenAmount"/>
+        <result column="occupied_amount" property="occupiedAmount"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="selectByMarginAccountId" resultMap="BaseResultMap">
+        SELECT margin_account_id, customer_id, currency, balance, frozen_amount,
+               occupied_amount, status, created_at, updated_at
+        FROM fx_margin_account
+        WHERE margin_account_id = #{marginAccountId}
+    </select>
+
+    <select id="selectByCustomerIdAndCurrency" resultMap="BaseResultMap">
+        SELECT margin_account_id, customer_id, currency, balance, frozen_amount,
+               occupied_amount, status, created_at, updated_at
+        FROM fx_margin_account
+        WHERE customer_id = #{customerId} AND currency = #{currency}
+    </select>
+
+    <select id="selectByCustomerId" resultMap="BaseResultMap">
+        SELECT margin_account_id, customer_id, currency, balance, frozen_amount,
+               occupied_amount, status, created_at, updated_at
+        FROM fx_margin_account
+        WHERE customer_id = #{customerId}
+        ORDER BY currency, margin_account_id
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxMarginAccount">
+        INSERT INTO fx_margin_account (margin_account_id, customer_id, currency, balance,
+            frozen_amount, occupied_amount, status, created_at, updated_at)
+        VALUES (#{marginAccountId}, #{customerId}, #{currency}, #{balance},
+            #{frozenAmount}, #{occupiedAmount}, #{status}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxMarginAccount">
+        UPDATE fx_margin_account
+        SET balance = #{balance},
+            frozen_amount = #{frozenAmount},
+            occupied_amount = #{occupiedAmount},
+            updated_at = NOW()
+        WHERE margin_account_id = #{marginAccountId}
+    </update>
+
+</mapper>

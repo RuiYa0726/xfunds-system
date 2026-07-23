@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/xfunds?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: aa111111
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+  http:
+    encoding:
+      enabled: true
+      charset: UTF-8
+      force: true
+      force-request: true
+      force-response: true
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 智谱GLM 大模型配置（报表助手复杂语义解析）
+llm:
+  # 是否启用 LLM 解析（false 时仅用规则解析）
+  enabled: true
+  # 智谱开放平台 API Key（在 https://open.bigmodel.cn/ 控制台创建）
+  api-key: 5086d77dd330488e9432760eb424d40c.2LLzxjPErSIxpfnY
+  # 模型名：glm-4-flash（免费）/ glm-4-flashx / glm-4-plus
+  model: glm-4-flash
+  # API 地址（兼容 OpenAI 协议）
+  base-url: https://open.bigmodel.cn/api/paas/v4
+  # 超时（毫秒）
+  timeout: 30000
+  # 温度：0.1 适合结构化输出
+  temperature: 0.1

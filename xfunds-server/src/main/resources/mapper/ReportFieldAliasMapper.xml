@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.ReportFieldAliasMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.ReportFieldAlias">
+        <id column="id" property="id"/>
+        <result column="field_code" property="fieldCode"/>
+        <result column="alias_word" property="aliasWord"/>
+        <result column="alias_type" property="aliasType"/>
+    </resultMap>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT id, field_code, alias_word, alias_type
+        FROM report_field_alias
+        ORDER BY field_code, alias_type DESC, alias_word
+    </select>
+
+    <select id="selectByFieldCode" resultMap="BaseResultMap">
+        SELECT id, field_code, alias_word, alias_type
+        FROM report_field_alias
+        WHERE field_code = #{fieldCode}
+    </select>
+
+</mapper>

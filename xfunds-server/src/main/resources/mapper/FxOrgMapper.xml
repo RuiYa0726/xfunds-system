@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxOrgMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxOrg">
+        <id column="org_code" property="orgCode"/>
+        <result column="org_name" property="orgName"/>
+        <result column="org_level" property="orgLevel"/>
+        <result column="parent_org_code" property="parentOrgCode"/>
+        <result column="org_type" property="orgType"/>
+        <result column="is_trading_org" property="isTradingOrg"/>
+        <result column="approval_limit" property="approvalLimit"/>
+        <result column="fx_business_flag" property="fxBusinessFlag"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        org_code, org_name, org_level, parent_org_code, org_type, is_trading_org,
+        approval_limit, fx_business_flag, status, created_at, updated_at
+    </sql>
+
+    <select id="selectByOrgCode" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_org
+        WHERE org_code = #{orgCode}
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_org
+        ORDER BY org_level, org_code
+    </select>
+
+    <select id="selectOrgAndParents" resultMap="BaseResultMap">
+        WITH RECURSIVE org_hierarchy AS (
+            SELECT org_code, org_name, org_level, parent_org_code, org_type, is_trading_org, approval_limit, fx_business_flag, status, created_at, updated_at
+            FROM fx_org
+            WHERE org_code = #{orgCode}
+            UNION ALL
+            SELECT o.org_code, o.org_name, o.org_level, o.parent_org_code, o.org_type, o.is_trading_org, o.approval_limit, o.fx_business_flag, o.status, o.created_at, o.updated_at
+            FROM fx_org o
+            INNER JOIN org_hierarchy oh ON o.org_code = oh.parent_org_code
+        )
+        SELECT * FROM org_hierarchy
+        ORDER BY org_level DESC
+    </select>
+
+    <select id="selectOrgAndChildren" resultMap="BaseResultMap">
+        WITH RECURSIVE org_hierarchy AS (
+            SELECT org_code, org_name, org_level, parent_org_code, org_type, is_trading_org, approval_limit, fx_business_flag, status, created_at, updated_at
+            FROM fx_org
+            WHERE org_code = #{orgCode}
+            UNION ALL
+            SELECT o.org_code, o.org_name, o.org_level, o.parent_org_code, o.org_type, o.is_trading_org, o.approval_limit, o.fx_business_flag, o.status, o.created_at, o.updated_at
+            FROM fx_org o
+            INNER JOIN org_hierarchy oh ON o.parent_org_code = oh.org_code
+        )
+        SELECT * FROM org_hierarchy
+        ORDER BY org_level, org_code
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxOrg">
+        INSERT INTO fx_org (org_code, org_name, org_level, parent_org_code, org_type,
+            is_trading_org, approval_limit, fx_business_flag, status, created_at, updated_at)
+        VALUES (#{orgCode}, #{orgName}, #{orgLevel}, #{parentOrgCode}, #{orgType},
+            #{isTradingOrg}, #{approvalLimit}, #{fxBusinessFlag}, #{status}, NOW(), NOW())
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxOrg">
+        UPDATE fx_org
+        SET org_name = #{orgName},
+            org_level = #{orgLevel},
+            parent_org_code = #{parentOrgCode},
+            org_type = #{orgType},
+            is_trading_org = #{isTradingOrg},
+            approval_limit = #{approvalLimit},
+            fx_business_flag = #{fxBusinessFlag},
+            status = #{status},
+            updated_at = NOW()
+        WHERE org_code = #{orgCode}
+    </update>
+
+</mapper>

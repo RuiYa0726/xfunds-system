@@ -1,0 +1,1 @@
+import{s as e}from"./_plugin-vue_export-helper-0d2294c2.js";function s(t){return e({url:"/task/my",method:"get",params:t})}function r(t){return e({url:`/task/${t}`,method:"get"})}function a(t){return e({url:`/task/${t}/complete-modify`,method:"post"})}export{r as a,a as c,s as g};

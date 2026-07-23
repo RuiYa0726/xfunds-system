@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxTradeLifecycleMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxTradeLifecycle">
+        <id column="event_id" property="eventId"/>
+        <result column="trade_id" property="tradeId"/>
+        <result column="event_type" property="eventType"/>
+        <result column="event_time" property="eventTime"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="operator_name" property="operatorName"/>
+        <result column="before_status" property="beforeStatus"/>
+        <result column="after_status" property="afterStatus"/>
+        <result column="event_amount" property="eventAmount"/>
+        <result column="event_rate" property="eventRate"/>
+        <result column="related_trade_id" property="relatedTradeId"/>
+        <result column="remark" property="remark"/>
+        <result column="audit_snapshot" property="auditSnapshot"/>
+    </resultMap>
+
+    <select id="selectByTradeId" resultMap="BaseResultMap">
+        SELECT l.event_id, l.trade_id, l.event_type, l.event_time, l.operator_id, l.before_status,
+               l.after_status, l.event_amount, l.event_rate, l.related_trade_id, l.remark, l.audit_snapshot,
+               u.real_name as operator_name
+        FROM fx_trade_lifecycle l
+        LEFT JOIN fx_user u ON l.operator_id = u.user_id
+        WHERE l.trade_id = #{tradeId}
+        ORDER BY l.event_time
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxTradeLifecycle" useGeneratedKeys="true" keyProperty="eventId">
+        INSERT INTO fx_trade_lifecycle (trade_id, event_type, event_time, operator_id,
+            before_status, after_status, event_amount, event_rate, related_trade_id, remark, audit_snapshot)
+        VALUES (#{tradeId}, #{eventType}, NOW(), #{operatorId},
+            #{beforeStatus}, #{afterStatus}, #{eventAmount}, #{eventRate}, #{relatedTradeId}, #{remark}, #{auditSnapshot})
+    </insert>
+
+</mapper>

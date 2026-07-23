@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxTaskMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxTask">
+        <id column="task_id" property="taskId"/>
+        <result column="task_type" property="taskType"/>
+        <result column="trade_id" property="tradeId"/>
+        <result column="business_key" property="businessKey"/>
+        <result column="business_type" property="businessType"/>
+        <result column="priority" property="priority"/>
+        <result column="assignee_id" property="assigneeId"/>
+        <result column="assignee_role" property="assigneeRole"/>
+        <result column="assignee_org" property="assigneeOrg"/>
+        <result column="assignee_org_level" property="assigneeOrgLevel"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="due_time" property="dueTime"/>
+        <result column="claim_time" property="claimTime"/>
+        <result column="complete_time" property="completeTime"/>
+        <result column="claim_lock" property="claimLock"/>
+        <result column="payload" property="payload"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        task_id, task_type, trade_id, business_key, business_type, priority, assignee_id,
+        assignee_role, assignee_org, assignee_org_level, status, create_time, due_time,
+        claim_time, complete_time, claim_lock, payload
+    </sql>
+
+    <select id="selectByTaskId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE task_id = #{taskId}
+    </select>
+
+    <select id="selectByStatus" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE status = #{status}
+        ORDER BY priority DESC, create_time
+    </select>
+
+    <select id="selectByAssigneeId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE assignee_id = #{assigneeId}
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectActiveByAssigneeId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE assignee_id = #{assigneeId}
+          AND status = 'PENDING'
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectByRoleAndOrg" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE assignee_role = #{assigneeRole}
+          AND assignee_org = #{assigneeOrg}
+          AND status = 'PENDING'
+        ORDER BY priority DESC, create_time
+    </select>
+
+    <select id="selectByRole" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE assignee_role = #{assigneeRole}
+          AND status = 'PENDING'
+        ORDER BY priority DESC, create_time
+    </select>
+
+    <select id="selectByRoleAndOrgList" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE assignee_role = #{assigneeRole}
+          AND assignee_org IN
+          <foreach collection="orgCodes" item="orgCode" open="(" separator="," close=")">
+              #{orgCode}
+          </foreach>
+          AND status = 'PENDING'
+        ORDER BY priority DESC, create_time DESC
+    </select>
+
+    <select id="selectPendingByTradeIdAndBusinessType" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_task
+        WHERE trade_id = #{tradeId}
+          AND business_type = #{businessType}
+          AND status IN ('PENDING', 'CLAIMED')
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxTask" useGeneratedKeys="true" keyProperty="taskId">
+        INSERT INTO fx_task (task_type, trade_id, business_key, business_type, priority,
+            assignee_id, assignee_role, assignee_org, assignee_org_level, status, create_time,
+            due_time, claim_time, complete_time, claim_lock, payload)
+        VALUES (#{taskType}, #{tradeId}, #{businessKey}, #{businessType}, #{priority},
+            #{assigneeId}, #{assigneeRole}, #{assigneeOrg}, #{assigneeOrgLevel}, #{status}, NOW(),
+            #{dueTime}, #{claimTime}, #{completeTime}, #{claimLock}, #{payload})
+    </insert>
+
+    <update id="update" parameterType="com.xfunds.entity.FxTask">
+        UPDATE fx_task
+        SET status = #{status},
+            assignee_id = #{assigneeId},
+            claim_time = #{claimTime},
+            complete_time = #{completeTime},
+            claim_lock = #{claimLock}
+        WHERE task_id = #{taskId}
+    </update>
+
+</mapper>

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxApprovalLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxApprovalLog">
+        <id column="log_id" property="logId"/>
+        <result column="trade_id" property="tradeId"/>
+        <result column="approval_node" property="approvalNode"/>
+        <result column="approver_id" property="approverId"/>
+        <result column="approver_name" property="approverName"/>
+        <result column="approver_org" property="approverOrg"/>
+        <result column="decision" property="decision"/>
+        <result column="decision_time" property="decisionTime"/>
+        <result column="comment" property="comment"/>
+        <result column="before_status" property="beforeStatus"/>
+        <result column="after_status" property="afterStatus"/>
+    </resultMap>
+
+    <select id="selectByTradeId" resultMap="BaseResultMap">
+        SELECT log_id, trade_id, approval_node, approver_id, approver_name, approver_org,
+               decision, decision_time, comment, before_status, after_status
+        FROM fx_approval_log
+        WHERE trade_id = #{tradeId}
+        ORDER BY decision_time
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxApprovalLog" useGeneratedKeys="true" keyProperty="logId">
+        INSERT INTO fx_approval_log (trade_id, approval_node, approver_id, approver_name,
+            approver_org, decision, decision_time, comment, before_status, after_status)
+        VALUES (#{tradeId}, #{approvalNode}, #{approverId}, #{approverName},
+            #{approverOrg}, #{decision}, NOW(), #{comment}, #{beforeStatus}, #{afterStatus})
+    </insert>
+
+</mapper>

@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfunds.mapper.FxQuoteMapper">
+
+    <resultMap id="BaseResultMap" type="com.xfunds.entity.FxQuote">
+        <id column="quote_id" property="quoteId"/>
+        <result column="quote_type" property="quoteType"/>
+        <result column="currency_pair" property="currencyPair"/>
+        <result column="base_currency" property="baseCurrency"/>
+        <result column="quote_currency" property="quoteCurrency"/>
+        <result column="term" property="term"/>
+        <result column="maturity_date" property="maturityDate"/>
+        <result column="market_mid_rate" property="marketMidRate"/>
+        <result column="total_buy_rate" property="totalBuyRate"/>
+        <result column="total_sell_rate" property="totalSellRate"/>
+        <result column="branch_customer_buy_rate" property="branchCustomerBuyRate"/>
+        <result column="branch_customer_sell_rate" property="branchCustomerSellRate"/>
+        <result column="forward_point" property="forwardPoint"/>
+        <result column="swap_point" property="swapPoint"/>
+        <result column="status" property="status"/>
+        <result column="effective_time" property="effectiveTime"/>
+        <result column="published_by" property="publishedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        quote_id, quote_type, currency_pair, base_currency, quote_currency, term, maturity_date,
+        market_mid_rate, total_buy_rate, total_sell_rate, branch_customer_buy_rate,
+        branch_customer_sell_rate, forward_point, swap_point,
+        status, effective_time, published_by, created_at, updated_at
+    </sql>
+
+    <select id="selectByQuoteId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        WHERE quote_id = #{quoteId}
+    </select>
+
+    <select id="selectByTypeAndPair" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        WHERE quote_type = #{quoteType} AND currency_pair = #{currencyPair}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="selectAll" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        ORDER BY quote_type, currency_pair
+    </select>
+
+    <!-- 根据报价类型查询有效报价，按货币对和期限排序 -->
+    <!-- 期限排序顺序：1D, SW, 1M, 其他按字母顺序 -->
+    <select id="selectByType" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        WHERE quote_type = #{quoteType} AND status = 'ACTIVE'
+        ORDER BY currency_pair, 
+            CASE term 
+                WHEN '1D' THEN 1 
+                WHEN 'SW' THEN 2 
+                WHEN '1M' THEN 3 
+                WHEN '3M' THEN 4 
+                WHEN '6M' THEN 5 
+                WHEN '1Y' THEN 6 
+                ELSE 99 
+            END
+    </select>
+
+    <!-- 根据条件分页查询报价列表 -->
+    <select id="selectByCondition" parameterType="map" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        <where>
+            <if test="quoteType != null and quoteType != ''">
+                AND quote_type = #{quoteType}
+            </if>
+            <if test="currencyPair != null and currencyPair != ''">
+                AND currency_pair = #{currencyPair}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY quote_type, currency_pair, created_at DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <!-- 根据条件统计报价总数 -->
+    <select id="countByCondition" parameterType="map" resultType="long">
+        SELECT COUNT(*)
+        FROM fx_quote
+        <where>
+            <if test="quoteType != null and quoteType != ''">
+                AND quote_type = #{quoteType}
+            </if>
+            <if test="currencyPair != null and currencyPair != ''">
+                AND currency_pair = #{currencyPair}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <insert id="insert" parameterType="com.xfunds.entity.FxQuote" useGeneratedKeys="true" keyProperty="quoteId">
+        INSERT INTO fx_quote (quote_type, currency_pair, base_currency, quote_currency, term,
+            maturity_date, market_mid_rate, total_buy_rate, total_sell_rate, branch_customer_buy_rate,
+            branch_customer_sell_rate, forward_point, swap_point,
+            status, effective_time, published_by, created_at, updated_at)
+        VALUES (#{quoteType}, #{currencyPair}, #{baseCurrency}, #{quoteCurrency}, #{term},
+            #{maturityDate}, #{marketMidRate}, #{totalBuyRate}, #{totalSellRate}, #{branchCustomerBuyRate},
+            #{branchCustomerSellRate}, #{forwardPoint}, #{swapPoint},
+            #{status}, #{effectiveTime}, #{publishedBy}, NOW(), NOW())
+    </insert>
+
+    <!-- 根据报价ID更新报价全部字段 -->
+    <update id="update" parameterType="com.xfunds.entity.FxQuote">
+        UPDATE fx_quote
+        SET quote_type = #{quoteType},
+            currency_pair = #{currencyPair},
+            base_currency = #{baseCurrency},
+            quote_currency = #{quoteCurrency},
+            term = #{term},
+            maturity_date = #{maturityDate},
+            market_mid_rate = #{marketMidRate},
+            total_buy_rate = #{totalBuyRate},
+            total_sell_rate = #{totalSellRate},
+            branch_customer_buy_rate = #{branchCustomerBuyRate},
+            branch_customer_sell_rate = #{branchCustomerSellRate},
+            forward_point = #{forwardPoint},
+            swap_point = #{swapPoint},
+            status = #{status},
+            effective_time = #{effectiveTime},
+            published_by = #{publishedBy},
+            updated_at = NOW()
+        WHERE quote_id = #{quoteId}
+    </update>
+
+    <!-- 查询所有有效报价（不分类型） -->
+    <select id="selectAllActive" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        WHERE status = 'ACTIVE'
+        ORDER BY quote_type, currency_pair
+    </select>
+
+    <!-- 将所有有效报价置为失效 -->
+    <update id="deactivateAllActive">
+        UPDATE fx_quote SET status = 'INACTIVE', updated_at = NOW() WHERE status = 'ACTIVE'
+    </update>
+
+    <!-- 删除创建时间早于指定天数的报价 -->
+    <delete id="deleteOlderThanDays">
+        DELETE FROM fx_quote WHERE created_at &lt; DATE_SUB(NOW(), INTERVAL #{days} DAY)
+    </delete>
+
+    <!-- 查询指定货币对、报价类型近 N 天的汇率序列（含历史 INACTIVE），按 effective_time 升序 -->
+    <select id="selectRecentRates" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM fx_quote
+        WHERE quote_type = #{quoteType}
+          AND currency_pair = #{currencyPair}
+          AND market_mid_rate IS NOT NULL
+          AND effective_time >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+        ORDER BY effective_time ASC
+    </select>
+
+</mapper>
